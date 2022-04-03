@@ -1,0 +1,18 @@
+{
+  "name": "git-commit-parser",
+  "version": "0.1.0",
+  "description": "Scanner and parser for git commit messages",
+  "main": "index.js",
+  "author": "Thomas Wirth <thomas@wtho.de>",
+  "license": "MIT",
+  "scripts": {
+    "test": "jest"
+  },
+  "devDependencies": {
+    "@types/jest": "^27.4.1",
+    "jest": "^27.5.1",
+    "ts-jest": "^27.1.4",
+    "ts-node": "^10.7.0",
+    "typescript": "^4.6.3"
+  }
+}
