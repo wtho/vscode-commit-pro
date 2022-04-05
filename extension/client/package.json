@@ -1,5 +1,5 @@
 {
-  "name": "vscode-conventional-commits",
+	"name": "vscode-conventional-commits-extension-client",
   "version": "0.1.0",
   "description": "Author your Commit Message like your Code",
   "keywords": [
@@ -8,20 +8,20 @@
     "commit",
     "git"
   ],
-  "author": "Thomas Wirth <thomas@wtho.de",
+  "author": "Thomas Wirth <thomas@wtho.de>",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/wtho/vscode-conventional-commits.git"
   },
-  "workspaces": [
-    "git-commit-parser",
-    "extension",
-    "extension/client",
-    "extension/server"
-  ],
-  "scripts": {
-    "ts-projects:compile": "tsc -b",
-		"ts-projects:watch": "tsc -b -w"
-  }
+	"engines": {
+		"vscode": "^1.63.0"
+	},
+	"dependencies": {
+		"vscode-languageclient": "^7.0.0"
+	},
+	"devDependencies": {
+		"@types/vscode": "^1.63.0",
+		"@vscode/test-electron": "^2.1.2"
+	}
 }
