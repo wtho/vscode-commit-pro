@@ -1,3 +1,9 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Thomas Wirth.
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 // import * as formatter from './format';
 // import * as edit from './edit';
 import * as scanner from './scanner'
@@ -72,6 +78,12 @@ export interface GitCommitScanner {
    */
   getTokenError(): ScanError
 }
+
+/**
+ * Returns the position of the first node of a type in the AST
+ */
+export const getRangeForCommitPosition: (rootNode: Node, type: NodeType) => Range =
+  parser.getRangeForCommitPosition
 
 /**
  * For a given offset, evaluate the location in the git commit document. Each segment in the location path is either a property name or an array index.
@@ -218,14 +230,24 @@ export type NodeType =
   | 'number'
   | 'symbol'
 
+
+export interface Position {
+  readonly line: number
+  readonly character: number
+}
+export interface Range {
+  readonly start: Position
+  readonly end: Position
+}
+
 export interface Node {
   readonly type: NodeType
-  readonly value?: any
   readonly offset: number
   readonly length: number
-  readonly colonOffset?: number
+  readonly range: Range
   readonly parent?: Node
   readonly children?: Node[]
+  readonly value?: any
 }
 
 /**

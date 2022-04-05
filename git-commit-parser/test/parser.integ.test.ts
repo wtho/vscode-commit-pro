@@ -2,197 +2,200 @@ import { ParseError } from '../src/main'
 import * as parser from '../src/parser'
 
 describe('parser integ', () => {
-  test('should parse a commit message "feat: a commit message"', () => {
-    const errors: ParseError[] = []
 
-    const parsed = parser.parseTree('feat: a commit message', errors)
+  describe('parseTree', () => {
+    test('should parse a commit message "feat: a commit message"', () => {
+      const errors: ParseError[] = []
 
-    expect(errors).toEqual([])
+      const parsed = parser.parseTree('feat: a commit message', errors)
 
-    expect(parsed).toBeTruthy()
-    expect(parsed?.type).toBe('message')
-    expect(parsed?.children).toHaveLength(1)
-    const header = parsed?.children?.[0]
-    expect(header).toBeTruthy()
-    expect(header?.type).toBe('header')
-    expect(header?.children).toHaveLength(2)
-    const type = header?.children?.[0]
-    const description = header?.children?.[1]
-    expect(type).toBeTruthy()
-    expect(type?.type).toBe('type')
-    expect(type?.children).toHaveLength(1)
-    expect(type?.children?.[0]?.type).toBe('word')
-    expect(type?.children?.[0]?.value).toBe('feat')
+      expect(errors).toEqual([])
 
-    expect(description).toBeTruthy()
-    expect(description?.type).toBe('description')
-    expect(description?.children).toHaveLength(5)
-    expect(description?.children?.[0]?.type).toBe('word')
-    expect(description?.children?.[0]?.value).toBe('a')
-    expect(description?.children?.[1]?.type).toBe('whitespace')
-    expect(description?.children?.[1]?.value).toBe(' ')
-    expect(description?.children?.[2]?.type).toBe('word')
-    expect(description?.children?.[2]?.value).toBe('commit')
-    expect(description?.children?.[3]?.type).toBe('whitespace')
-    expect(description?.children?.[3]?.value).toBe(' ')
-    expect(description?.children?.[4]?.type).toBe('word')
-    expect(description?.children?.[4]?.value).toBe('message')
-  })
+      expect(parsed).toBeTruthy()
+      expect(parsed?.type).toBe('message')
+      expect(parsed?.children).toHaveLength(1)
+      const header = parsed?.children?.[0]
+      expect(header).toBeTruthy()
+      expect(header?.type).toBe('header')
+      expect(header?.children).toHaveLength(2)
+      const type = header?.children?.[0]
+      const description = header?.children?.[1]
+      expect(type).toBeTruthy()
+      expect(type?.type).toBe('type')
+      expect(type?.children).toHaveLength(1)
+      expect(type?.children?.[0]?.type).toBe('word')
+      expect(type?.children?.[0]?.value).toBe('feat')
 
-  test('should parse a commit message "feat(scope): a commit message"', () => {
-    const errors: ParseError[] = []
+      expect(description).toBeTruthy()
+      expect(description?.type).toBe('description')
+      expect(description?.children).toHaveLength(5)
+      expect(description?.children?.[0]?.type).toBe('word')
+      expect(description?.children?.[0]?.value).toBe('a')
+      expect(description?.children?.[1]?.type).toBe('whitespace')
+      expect(description?.children?.[1]?.value).toBe(' ')
+      expect(description?.children?.[2]?.type).toBe('word')
+      expect(description?.children?.[2]?.value).toBe('commit')
+      expect(description?.children?.[3]?.type).toBe('whitespace')
+      expect(description?.children?.[3]?.value).toBe(' ')
+      expect(description?.children?.[4]?.type).toBe('word')
+      expect(description?.children?.[4]?.value).toBe('message')
+    })
 
-    const parsed = parser.parseTree('feat(scope): a commit message', errors)
+    test('should parse a commit message "feat(scope): a commit message"', () => {
+      const errors: ParseError[] = []
 
-    expect(errors).toEqual([])
+      const parsed = parser.parseTree('feat(scope): a commit message', errors)
 
-    expect(parsed).toBeTruthy()
-    expect(parsed?.type).toBe('message')
-    expect(parsed?.children).toHaveLength(1)
-    const header = parsed?.children?.[0]
-    expect(header).toBeTruthy()
-    expect(header?.type).toBe('header')
-    expect(header?.children).toHaveLength(5)
-    const type = header?.children?.[0]
-    const parenOpen = header?.children?.[1]
-    const scope = header?.children?.[2]
-    const parenClose = header?.children?.[3]
-    const description = header?.children?.[4]
+      expect(errors).toEqual([])
 
-    expect(type).toBeTruthy()
-    expect(type?.type).toBe('type')
-    expect(type?.children).toHaveLength(1)
-    expect(type?.children?.[0]?.type).toBe('word')
-    expect(type?.children?.[0]?.value).toBe('feat')
+      expect(parsed).toBeTruthy()
+      expect(parsed?.type).toBe('message')
+      expect(parsed?.children).toHaveLength(1)
+      const header = parsed?.children?.[0]
+      expect(header).toBeTruthy()
+      expect(header?.type).toBe('header')
+      expect(header?.children).toHaveLength(5)
+      const type = header?.children?.[0]
+      const parenOpen = header?.children?.[1]
+      const scope = header?.children?.[2]
+      const parenClose = header?.children?.[3]
+      const description = header?.children?.[4]
 
-    expect(parenOpen).toBeTruthy()
-    expect(parenOpen?.type).toBe('scope-paren-open')
-    expect(parenOpen?.value).toEqual('(')
+      expect(type).toBeTruthy()
+      expect(type?.type).toBe('type')
+      expect(type?.children).toHaveLength(1)
+      expect(type?.children?.[0]?.type).toBe('word')
+      expect(type?.children?.[0]?.value).toBe('feat')
 
-    expect(scope).toBeTruthy()
-    expect(scope?.type).toBe('scope')
-    expect(scope?.children).toHaveLength(1)
-    expect(scope?.children?.[0]?.type).toBe('word')
-    expect(scope?.children?.[0]?.value).toBe('scope')
+      expect(parenOpen).toBeTruthy()
+      expect(parenOpen?.type).toBe('scope-paren-open')
+      expect(parenOpen?.value).toEqual('(')
 
-    expect(parenClose).toBeTruthy()
-    expect(parenClose?.type).toBe('scope-paren-close')
-    expect(parenClose?.value).toEqual(')')
+      expect(scope).toBeTruthy()
+      expect(scope?.type).toBe('scope')
+      expect(scope?.children).toHaveLength(1)
+      expect(scope?.children?.[0]?.type).toBe('word')
+      expect(scope?.children?.[0]?.value).toBe('scope')
 
-    expect(description).toBeTruthy()
-    expect(description?.type).toBe('description')
-    expect(description?.children).toHaveLength(5)
-    expect(description?.children?.[0]?.type).toBe('word')
-    expect(description?.children?.[0]?.value).toBe('a')
-    expect(description?.children?.[1]?.type).toBe('whitespace')
-    expect(description?.children?.[1]?.value).toBe(' ')
-    expect(description?.children?.[2]?.type).toBe('word')
-    expect(description?.children?.[2]?.value).toBe('commit')
-    expect(description?.children?.[3]?.type).toBe('whitespace')
-    expect(description?.children?.[3]?.value).toBe(' ')
-    expect(description?.children?.[4]?.type).toBe('word')
-    expect(description?.children?.[4]?.value).toBe('message')
-  })
+      expect(parenClose).toBeTruthy()
+      expect(parenClose?.type).toBe('scope-paren-close')
+      expect(parenClose?.value).toEqual(')')
 
-  test('should parse a commit message "feat(scope)!: a commit message"', () => {
-    const errors: ParseError[] = []
+      expect(description).toBeTruthy()
+      expect(description?.type).toBe('description')
+      expect(description?.children).toHaveLength(5)
+      expect(description?.children?.[0]?.type).toBe('word')
+      expect(description?.children?.[0]?.value).toBe('a')
+      expect(description?.children?.[1]?.type).toBe('whitespace')
+      expect(description?.children?.[1]?.value).toBe(' ')
+      expect(description?.children?.[2]?.type).toBe('word')
+      expect(description?.children?.[2]?.value).toBe('commit')
+      expect(description?.children?.[3]?.type).toBe('whitespace')
+      expect(description?.children?.[3]?.value).toBe(' ')
+      expect(description?.children?.[4]?.type).toBe('word')
+      expect(description?.children?.[4]?.value).toBe('message')
+    })
 
-    const parsed = parser.parseTree('feat(scope)!: a commit message', errors)
+    test('should parse a commit message "feat(scope)!: a commit message"', () => {
+      const errors: ParseError[] = []
 
-    expect(errors).toEqual([])
+      const parsed = parser.parseTree('feat(scope)!: a commit message', errors)
 
-    expect(parsed).toBeTruthy()
-    expect(parsed?.type).toBe('message')
-    expect(parsed?.children).toHaveLength(1)
-    const header = parsed?.children?.[0]
-    expect(header).toBeTruthy()
-    expect(header?.type).toBe('header')
-    expect(header?.children).toHaveLength(6)
-    const type = header?.children?.[0]
-    const parenOpen = header?.children?.[1]
-    const scope = header?.children?.[2]
-    const parenClose = header?.children?.[3]
-    const breakingExclamationMark = header?.children?.[4]
-    const description = header?.children?.[5]
-    expect(type).toBeTruthy()
-    expect(type?.type).toBe('type')
-    expect(type?.children).toHaveLength(1)
-    expect(type?.children?.[0]?.type).toBe('word')
-    expect(type?.children?.[0]?.value).toBe('feat')
+      expect(errors).toEqual([])
 
-    expect(parenOpen).toBeTruthy()
-    expect(parenOpen?.type).toBe('scope-paren-open')
-    expect(parenOpen?.value).toEqual('(')
+      expect(parsed).toBeTruthy()
+      expect(parsed?.type).toBe('message')
+      expect(parsed?.children).toHaveLength(1)
+      const header = parsed?.children?.[0]
+      expect(header).toBeTruthy()
+      expect(header?.type).toBe('header')
+      expect(header?.children).toHaveLength(6)
+      const type = header?.children?.[0]
+      const parenOpen = header?.children?.[1]
+      const scope = header?.children?.[2]
+      const parenClose = header?.children?.[3]
+      const breakingExclamationMark = header?.children?.[4]
+      const description = header?.children?.[5]
+      expect(type).toBeTruthy()
+      expect(type?.type).toBe('type')
+      expect(type?.children).toHaveLength(1)
+      expect(type?.children?.[0]?.type).toBe('word')
+      expect(type?.children?.[0]?.value).toBe('feat')
 
-    expect(scope).toBeTruthy()
-    expect(scope?.type).toBe('scope')
-    expect(scope?.children).toHaveLength(1)
-    expect(scope?.children?.[0]?.type).toBe('word')
-    expect(scope?.children?.[0]?.value).toBe('scope')
+      expect(parenOpen).toBeTruthy()
+      expect(parenOpen?.type).toBe('scope-paren-open')
+      expect(parenOpen?.value).toEqual('(')
 
-    expect(parenClose).toBeTruthy()
-    expect(parenClose?.type).toBe('scope-paren-close')
-    expect(parenClose?.value).toEqual(')')
+      expect(scope).toBeTruthy()
+      expect(scope?.type).toBe('scope')
+      expect(scope?.children).toHaveLength(1)
+      expect(scope?.children?.[0]?.type).toBe('word')
+      expect(scope?.children?.[0]?.value).toBe('scope')
 
-    expect(breakingExclamationMark).toBeTruthy()
-    expect(breakingExclamationMark?.type).toBe('breaking-exclamation-mark')
-    expect(breakingExclamationMark?.value).toBe('!')
+      expect(parenClose).toBeTruthy()
+      expect(parenClose?.type).toBe('scope-paren-close')
+      expect(parenClose?.value).toEqual(')')
 
-    expect(description).toBeTruthy()
-    expect(description?.type).toBe('description')
-    expect(description?.children).toHaveLength(5)
-    expect(description?.children?.[0]?.type).toBe('word')
-    expect(description?.children?.[0]?.value).toBe('a')
-    expect(description?.children?.[1]?.type).toBe('whitespace')
-    expect(description?.children?.[1]?.value).toBe(' ')
-    expect(description?.children?.[2]?.type).toBe('word')
-    expect(description?.children?.[2]?.value).toBe('commit')
-    expect(description?.children?.[3]?.type).toBe('whitespace')
-    expect(description?.children?.[3]?.value).toBe(' ')
-    expect(description?.children?.[4]?.type).toBe('word')
-    expect(description?.children?.[4]?.value).toBe('message')
-  })
+      expect(breakingExclamationMark).toBeTruthy()
+      expect(breakingExclamationMark?.type).toBe('breaking-exclamation-mark')
+      expect(breakingExclamationMark?.value).toBe('!')
 
-  test('should parse a commit message with body', () => {
-    const errors: ParseError[] = []
+      expect(description).toBeTruthy()
+      expect(description?.type).toBe('description')
+      expect(description?.children).toHaveLength(5)
+      expect(description?.children?.[0]?.type).toBe('word')
+      expect(description?.children?.[0]?.value).toBe('a')
+      expect(description?.children?.[1]?.type).toBe('whitespace')
+      expect(description?.children?.[1]?.value).toBe(' ')
+      expect(description?.children?.[2]?.type).toBe('word')
+      expect(description?.children?.[2]?.value).toBe('commit')
+      expect(description?.children?.[3]?.type).toBe('whitespace')
+      expect(description?.children?.[3]?.value).toBe(' ')
+      expect(description?.children?.[4]?.type).toBe('word')
+      expect(description?.children?.[4]?.value).toBe('message')
+    })
 
-    const message = `feat: a feature
-        |
-        |features:
-        |* implementation
-        |
-        |Solves #123`
-      .split('\n')
-      .map((line) => {
-        const splits = line.split('|')
-        if (splits.length > 1 && splits[0].trim() === '') {
-          return splits.slice(1).join('|')
-        }
-        return splits.join('|')
-      })
-      .join('\n')
+    test('should parse a commit message with body', () => {
+      const errors: ParseError[] = []
 
-    const parsed = parser.parseTree(message, errors)
+      const message = `feat: a feature
+          |
+          |features:
+          |* implementation
+          |
+          |Solves #123`
+        .split('\n')
+        .map((line) => {
+          const splits = line.split('|')
+          if (splits.length > 1 && splits[0].trim() === '') {
+            return splits.slice(1).join('|')
+          }
+          return splits.join('|')
+        })
+        .join('\n')
 
-    expect(errors).toEqual([])
+      const parsed = parser.parseTree(message, errors)
 
-    expect(parsed).toBeTruthy()
-    expect(parsed?.type).toBe('message')
-    expect(parsed?.children).toHaveLength(2)
+      expect(errors).toEqual([])
 
-    const body = parsed?.children?.[1]
-    expect(body).toBeTruthy()
-    expect(body?.type).toBe('body')
-    expect(body?.children).toHaveLength(12)
+      expect(parsed).toBeTruthy()
+      expect(parsed?.type).toBe('message')
+      expect(parsed?.children).toHaveLength(2)
 
-    const features = body?.children?.[0]
-    expect(features?.value).toBe('features')
-    const implementation = body?.children?.[5]
-    expect(implementation?.value).toBe('implementation')
-    const solves = body?.children?.[8]
-    expect(solves?.value).toBe('Solves')
-    const n123 = body?.children?.[11]
-    expect(n123?.value).toBe('123')
+      const body = parsed?.children?.[1]
+      expect(body).toBeTruthy()
+      expect(body?.type).toBe('body')
+      expect(body?.children).toHaveLength(12)
 
+      const features = body?.children?.[0]
+      expect(features?.value).toBe('features')
+      const implementation = body?.children?.[5]
+      expect(implementation?.value).toBe('implementation')
+      const solves = body?.children?.[8]
+      expect(solves?.value).toBe('Solves')
+      const n123 = body?.children?.[11]
+      expect(n123?.value).toBe('123')
+
+    })
   })
 })

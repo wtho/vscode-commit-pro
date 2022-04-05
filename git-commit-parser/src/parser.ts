@@ -1,3 +1,10 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Thomas Wirth.
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+
 import { createScanner } from './scanner'
 import {
   CommitContentPath,
@@ -8,6 +15,7 @@ import {
   ParseError,
   ParseErrorCode,
   ParseOptions,
+  Range,
   ScanError,
   Segment,
   SyntaxKind,
@@ -21,12 +29,12 @@ namespace ParseOptions {
 
 interface NodeImpl extends Node {
   type: NodeType
-  value?: any
   offset: number
   length: number
-  colonOffset?: number
+  range: Range
   parent?: NodeImpl
   children?: NodeImpl[]
+  value?: any
 }
 
 /**
@@ -40,8 +48,12 @@ export function getLocation(text: string, position: number): Location {
     value: {},
     offset: 0,
     length: 0,
-    type: 'header',
+    type: 'message',
     parent: undefined,
+    range: {
+      start: { line: 0, character: 0 },
+      end: { line: 0, character: 0 },
+    },
   }
   function setPreviousNode(
     value: string,
@@ -53,49 +65,31 @@ export function getLocation(text: string, position: number): Location {
     previousNodeInst.offset = offset
     previousNodeInst.length = length
     previousNodeInst.type = type
-    previousNodeInst.colonOffset = undefined
     previousNode = previousNodeInst
   }
   try {
     visit(text, {
       onHeaderBegin: (offset: number, length: number) => {
-        if (position <= offset) {
+        if (position < offset) {
           throw earlyReturnException
         }
         previousNode = undefined
         segments.push('header')
       },
-      // onObjectProperty: (name: string, offset: number, length: number) => {
-      // 	if (position < offset) {
-      // 		throw earlyReturnException;
-      // 	}
-      // 	setPreviousNode(name, offset, length, 'property');
-      // 	segments[segments.length - 1] = name;
-      // 	if (position <= offset + length) {
-      // 		throw earlyReturnException;
-      // 	}
-      // },
-      // onObjectEnd: (offset: number, length: number) => {
-      // 	if (position <= offset) {
-      // 		throw earlyReturnException;
-      // 	}
-      // 	previousNode = undefined;
-      // 	segments.pop();
-      // },
-      // onArrayBegin: (offset: number, length: number) => {
-      // 	if (position <= offset) {
-      // 		throw earlyReturnException;
-      // 	}
-      // 	previousNode = undefined;
-      // 	segments.push(0);
-      // },
-      // onArrayEnd: (offset: number, length: number) => {
-      // 	if (position <= offset) {
-      // 		throw earlyReturnException;
-      // 	}
-      // 	previousNode = undefined;
-      // 	segments.pop();
-      // },
+      onHeaderEnd: (offset: number, length: number) => {
+        if (position <= offset) {
+          throw earlyReturnException
+        }
+        previousNode = undefined
+        segments.pop()
+      },
+      onTypeBegin: (offset: number, length: number) => {
+        if (position < offset) {
+          throw earlyReturnException
+        }
+        previousNode = undefined
+        segments.push('type')
+      },
       onLiteralValue: (value: any, offset: number, length: number) => {
         if (position < offset) {
           throw earlyReturnException
@@ -106,25 +100,6 @@ export function getLocation(text: string, position: number): Location {
           throw earlyReturnException
         }
       },
-      // onSeparator: (sep: string, offset: number, length: number) => {
-      // 	if (position <= offset) {
-      // 		throw earlyReturnException;
-      // 	}
-      // 	if (sep === ':' && previousNode && previousNode.type === 'property') {
-      // 		previousNode.colonOffset = offset;
-      // 		isAtPropertyKey = false;
-      // 		previousNode = undefined;
-      // 	} else if (sep === ',') {
-      // 		const last = segments[segments.length - 1];
-      // 		if (typeof last === 'number') {
-      // 			segments[segments.length - 1] = last + 1;
-      // 		} else {
-      // 			isAtPropertyKey = true;
-      // 			segments[segments.length - 1] = '';
-      // 		}
-      // 		previousNode = undefined;
-      // 	}
-      // }
     })
   } catch (e) {
     if (e !== earlyReturnException) {
@@ -146,6 +121,47 @@ export function getLocation(text: string, position: number): Location {
       }
       return k === pattern.length
     },
+  }
+}
+
+/** Returns the position of the first node of a type in the AST */
+export function getRangeForCommitPosition(rootNode: Node, type: NodeType): Range {
+  if (['header', 'body', 'footer'].includes(type)) {
+    // smart search for whole body
+    const sectionNode = rootNode.children?.find((node) => node.type === type)
+    // TODO: multiple footers possible!
+    if (sectionNode) {
+      return sectionNode.range
+    }
+  }
+  if (['type', 'scope', 'description'].includes(type)) {
+    // smart search in header
+    const headerNode = rootNode.children?.find((node) => node.type === 'header')
+    if (headerNode && headerNode.children?.length) {
+      const searchedForNode = headerNode.children.find((node) => node.type === type)
+      if (searchedForNode) {
+        return searchedForNode.range
+      }
+    }
+  }
+  // generic search
+  const searchRecursively = (targetNode: Node): Range | undefined => {
+    if (targetNode.type === type) {
+      return targetNode.range
+    }
+    const innerTarget = targetNode.children?.find((node) => searchRecursively(node))
+    if (innerTarget) {
+      return innerTarget.range
+    }
+    return undefined
+  }
+  const result = searchRecursively(rootNode)
+  if (result) {
+    return result
+  }
+  return {
+    start: { line: 0, character: 0 },
+    end: { line: 0, character: 0 },
   }
 }
 
@@ -208,10 +224,14 @@ export function parseTree(
 ): Node | undefined {
   let currentParent: NodeImpl = {
     type: 'message',
-    offset: -1,
-    length: -1,
+    offset: 0,
+    length: text.length,
     children: [],
     parent: undefined,
+    range: {
+      start: { line: 0, character: 0 },
+      end: { line: 0, character: 0 },
+    },
   } // root
 
   function onElement(valueNode: Node): Node {
@@ -247,17 +267,35 @@ export function parseTree(
     // 	ensurePropertyComplete(offset + length);
     // },
 
-    onHeaderBegin: (offset: number, length: number) => {
+    onHeaderBegin: (
+      offset: number,
+      length: number,
+      startLine: number,
+      startCharacter
+    ) => {
       currentParent = onElement({
         type: 'header',
         offset,
         length: -1,
         parent: currentParent,
         children: [],
+        range: {
+          start: { line: startLine, character: startCharacter },
+          end: { line: 0, character: 0 },
+        },
       })
     },
-    onHeaderEnd: (offset: number, length: number) => {
+    onHeaderEnd: (
+      offset: number,
+      length: number,
+      startLine: number,
+      startCharacter: number
+    ) => {
       // ensurePropertyComplete(offset + length); // in case of a missing value for a property: make sure property is complete
+      currentParent.range = {
+        start: currentParent.range.start,
+        end: { line: startLine, character: startCharacter },
+      }
       currentParent.length = offset + length - currentParent.offset
       currentParent = currentParent.parent!
       // ensurePropertyComplete(offset + length);
@@ -276,28 +314,59 @@ export function parseTree(
         length: -1,
         parent: currentParent,
         children: [],
+        range: {
+          start: { line: startLine, character: startCharacter },
+          end: { line: 0, character: 0 },
+        },
       })
     },
-    onTypeEnd: (offset: number, length: number) => {
-      currentParent.length = offset + length - currentParent.offset
+    onTypeEnd: (
+      offset: number,
+      length: number,
+      startLine: number,
+      startCharacter: number
+    ) => {
+      currentParent.range = {
+        start: currentParent.range.start,
+        end: { line: startLine, character: startCharacter },
+      }
+      currentParent.length = offset + currentParent.offset
       currentParent = currentParent.parent!
     },
-    onScopeParenOpen: (offset: number, length: number) => {
+    onScopeParenOpen: (
+      offset: number,
+      length: number,
+      startLine: number,
+      startCharacter: number
+    ) => {
       onElement({
         type: 'scope-paren-open',
         offset,
         length,
         parent: currentParent,
         value: '(',
+        range: {
+          start: { line: startLine, character: startCharacter },
+          end: { line: startLine, character: startCharacter + 1 },
+        },
       })
     },
-    onScopeParenClose: (offset: number, length: number) => {
+    onScopeParenClose: (
+      offset: number,
+      length: number,
+      startLine: number,
+      startCharacter: number
+    ) => {
       onElement({
         type: 'scope-paren-close',
         offset,
         length,
         parent: currentParent,
         value: ')',
+        range: {
+          start: { line: startLine, character: startCharacter },
+          end: { line: startLine, character: startCharacter + 1 },
+        },
       })
     },
     onScopeBegin: (
@@ -313,9 +382,22 @@ export function parseTree(
         length: -1,
         parent: currentParent,
         children: [],
+        range: {
+          start: { line: startLine, character: startCharacter },
+          end: { line: 0, character: 0 },
+        },
       })
     },
-    onScopeEnd: (offset: number, length: number) => {
+    onScopeEnd: (
+      offset: number,
+      length: number,
+      startLine: number,
+      startCharacter: number
+    ) => {
+      currentParent.range = {
+        start: currentParent.range.start,
+        end: { line: startLine, character: startCharacter },
+      }
       currentParent.length = offset + length - currentParent.offset
       currentParent = currentParent.parent!
     },
@@ -332,40 +414,128 @@ export function parseTree(
         length: -1,
         parent: currentParent,
         children: [],
+        range: {
+          start: { line: startLine, character: startCharacter },
+          end: { line: 0, character: 0 },
+        },
       })
     },
-    onDescriptionEnd: (offset: number, length: number) => {
+    onDescriptionEnd: (
+      offset: number,
+      length: number,
+      startLine: number,
+      startCharacter: number
+    ) => {
+      currentParent.range = {
+        start: currentParent.range.start,
+        end: { line: startLine, character: startCharacter },
+      }
       currentParent.length = offset + length - currentParent.offset
       currentParent = currentParent.parent!
     },
-    onBodyBegin: (offset: number, length: number) => {
+    onBodyBegin: (
+      offset: number,
+      length: number,
+      startLine: number,
+      startCharacter: number
+    ) => {
       currentParent = onElement({
         type: 'body',
         offset,
         length: -1,
         parent: currentParent,
         children: [],
+        range: {
+          start: { line: startLine, character: startCharacter },
+          end: { line: 0, character: 0 },
+        },
       })
     },
-    onBodyEnd: (offset: number, length: number) => {
+    onBodyEnd: (
+      offset: number,
+      length: number,
+      startLine: number,
+      startCharacter: number
+    ) => {
+      currentParent.range = {
+        start: currentParent.range.start,
+        end: { line: startLine, character: startCharacter },
+      }
       currentParent.length = offset + length - currentParent.offset
       currentParent = currentParent.parent!
     },
-    onWordValue: (value: string, offset: number, length: number) => {
-      onElement({ type: 'word', offset, length, parent: currentParent, value })
+    onFooterBegin: (
+      offset: number,
+      length: number,
+      startLine: number,
+      startCharacter: number
+    ) => {
+      currentParent = onElement({
+        type: 'footer',
+        offset,
+        length: -1,
+        parent: currentParent,
+        children: [],
+        range: {
+          start: { line: startLine, character: startCharacter },
+          end: { line: 0, character: 0 },
+        },
+      })
+    },
+    onFooterEnd: (
+      offset: number,
+      length: number,
+      startLine: number,
+      startCharacter: number
+    ) => {
+      currentParent.range = {
+        start: currentParent.range.start,
+        end: { line: startLine, character: startCharacter },
+      }
+      currentParent.length = offset + length - currentParent.offset
+      currentParent = currentParent.parent!
+    },
+    onWordValue: (
+      value: string,
+      offset: number,
+      length: number,
+      startLine: number,
+      startCharacter: number
+    ) => {
+      onElement({
+        type: 'word',
+        offset,
+        length,
+        parent: currentParent,
+        value,
+        range: {
+          start: { line: startLine, character: startCharacter },
+          end: { line: startLine, character: startCharacter + value.length },
+        },
+      })
       // if (!currentParent.value) {
       //   currentParent.value = value
       // } else {
       //   currentParent.value += value;
       // }
     },
-    onWhitespaceValue: (value: string, offset: number, length: number) => {
+    onWhitespaceValue: (
+      value: string,
+      offset: number,
+      length: number,
+      startLine: number,
+      startCharacter: number
+    ) => {
       onElement({
         type: 'whitespace',
         offset,
         length,
         parent: currentParent,
         value,
+        range: {
+          start: { line: startLine, character: startCharacter },
+          end: { line: startLine, character: startCharacter + value.length },
+        },
       })
       // if (!currentParent.value) {
       //   currentParent.value = value
@@ -373,7 +543,12 @@ export function parseTree(
       //   currentParent.value += value;
       // }
     },
-    onBreakingExclamationMark(offset: number, length: number) {
+    onBreakingExclamationMark(
+      offset: number,
+      length: number,
+      startLine: number,
+      startCharacter: number
+    ) {
       if (currentParent.type !== 'header') {
         throw new Error('Unexpected breaking exclamation mark')
       }
@@ -383,15 +558,29 @@ export function parseTree(
         length,
         parent: currentParent,
         value: '!',
+        range: {
+          start: { line: startLine, character: startCharacter },
+          end: { line: startLine, character: startCharacter + 1 },
+        },
       })
     },
-    onNumber(value: string, offset: number, length: number) {
+    onNumber(
+      value: string,
+      offset: number,
+      length: number,
+      startLine: number,
+      startCharacter: number
+    ) {
       onElement({
         type: 'number',
         offset,
         length,
         parent: currentParent,
         value,
+        range: {
+          start: { line: startLine, character: startCharacter },
+          end: { line: startLine, character: startCharacter + value.length },
+        },
       })
       // if (!currentParent.value) {
       //   currentParent.value = value
@@ -399,13 +588,23 @@ export function parseTree(
       //   currentParent.value += value;
       // }
     },
-    onSymbol(value: string, offset: number, length: number) {
+    onSymbol(
+      value: string,
+      offset: number,
+      length: number,
+      startLine: number,
+      startCharacter: number
+    ) {
       onElement({
         type: 'symbol',
         offset,
         length,
         parent: currentParent,
         value,
+        range: {
+          start: { line: startLine, character: startCharacter },
+          end: { line: startLine, character: startCharacter + value.length },
+        },
       })
       // if (!currentParent.value) {
       //   currentParent.value = value
@@ -413,15 +612,21 @@ export function parseTree(
       //   currentParent.value += value;
       // }
     },
-    onComment(value: string, offset: number, length: number) {
-      if (!currentParent.value) {
-        currentParent.value = value
-      } else {
-        currentParent.value += value
-      }
-    },
+    onComment(
+      value: string,
+      offset: number,
+      length: number,
+      startLine: number,
+      startCharacter: number
+    ) {},
 
-    onError: (error: ParseErrorCode, offset: number, length: number) => {
+    onError: (
+      error: ParseErrorCode,
+      offset: number,
+      length: number,
+      startLine: number,
+      startCharacter: number
+    ) => {
       errors.push({ error, offset, length })
     },
   }
@@ -879,12 +1084,12 @@ export function visit(
 
   function parseValue(): boolean {
     switch (_scanner.getToken()) {
-      case SyntaxKind.WordLiteral:
-        return parseWord()
       case SyntaxKind.WhiteSpace:
         return parseWhitespace()
       case SyntaxKind.NumericLiteral:
         return parseNumber()
+      case SyntaxKind.WordLiteral:
+        return parseWord()
       default:
         return parseSymbol()
     }
@@ -941,9 +1146,9 @@ export function visit(
     _commitContentPath.pop()
     if (_scanner.getToken() === SyntaxKind.OpenParenToken) {
       onScopeParenOpen()
+      scanNext()
       onScopeBegin()
       _commitContentPath.push('scope')
-      scanNext()
       while (
         _scanner.getToken() !== SyntaxKind.ColonToken &&
         _scanner.getToken() !== SyntaxKind.CloseParenToken &&
@@ -1004,22 +1209,18 @@ export function visit(
   }
 
   function parseBodyAndFooter(): boolean {
-    while (
-      _scanner.getToken() === SyntaxKind.LineBreakToken
-    ) {
-			scanNext()
+    while (_scanner.getToken() === SyntaxKind.LineBreakToken) {
+      scanNext()
     }
-		if (_scanner.getToken() === SyntaxKind.EOF) {
-			return true
-		}
-		onBodyBegin()
+    if (_scanner.getToken() === SyntaxKind.EOF) {
+      return true
+    }
+    onBodyBegin()
     _commitContentPath.push('body')
-    while (
-      _scanner.getToken() !== SyntaxKind.EOF
-    ) {
+    while (_scanner.getToken() !== SyntaxKind.EOF) {
       parseValue()
     }
-		onBodyEnd()
+    onBodyEnd()
     _commitContentPath.pop()
     return true
   }

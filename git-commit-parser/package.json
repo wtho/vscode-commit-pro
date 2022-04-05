@@ -2,7 +2,8 @@
   "name": "git-commit-parser",
   "version": "0.1.0",
   "description": "Scanner and parser for git commit messages",
-  "main": "index.js",
+  "main": "out/main.js",
+  "types": "out/main.d.ts",
   "author": "Thomas Wirth <thomas@wtho.de>",
   "license": "MIT",
   "scripts": {
