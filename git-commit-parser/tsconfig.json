@@ -2,7 +2,7 @@
   "compilerOptions": {
     "module": "commonjs",                                /* Specify what module code is generated. */
     "target": "es2020",
-    "lib": ["es2020"],
+    "lib": ["es2020", "esnext.Array"],
     "outDir": "out",
     "sourceMap": true,
     "esModuleInterop": true,                             /* Emit additional JavaScript to ease support for importing CommonJS modules. This enables `allowSyntheticDefaultImports` for type compatibility. */

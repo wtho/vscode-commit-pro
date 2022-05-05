@@ -3,20 +3,18 @@ import {
   SemanticTokensLegend,
   SemanticTokensBuilder,
   CancellationToken,
-  HandlerResult,
   ResponseError,
   ResultProgressReporter,
   SemanticTokensDelta,
   SemanticTokensDeltaParams,
   SemanticTokensDeltaPartialResult,
-  TextDocuments,
   WorkDoneProgressReporter,
   SemanticTokens,
   SemanticTokensClientCapabilities,
   SemanticTokensParams,
   SemanticTokensPartialResult,
 } from 'vscode-languageserver/node'
-import { TextDocument } from 'vscode-languageserver-textdocument'
+import { CommitMessageProvider } from './commit-message-provider'
 
 const standardTokens = [
   'namespace',
@@ -59,32 +57,27 @@ const standardModifiers = [
 
 type StandardToken = typeof standardTokens[number]
 
-const tokenMap: { [P in parser.NodeType]: StandardToken } = {
+const tokenMap: { [P in parser.NodeType]: StandardToken | null } = {
   type: 'type',
   'scope-paren-open': 'operator',
   scope: 'class',
   'scope-paren-close': 'operator',
-  'breaking-exclamation-mark': 'macro',
-  'breaking-change-literal': 'macro',
-  description: 'label',
-  message: 'string',
-  header: 'string',
-  body: 'string',
-  footer: 'string',
-  'footer-token': 'string',
-  'footer-word-token': 'function',
-  'footer-word': 'keyword',
+  'breaking-exclamation-mark': 'interface',
+  'breaking-change-literal': 'interface',
+  description: 'string',
+  message: null,
+  header: null,
+  body: null,
+  footer: null,
+  'footer-token': 'property',
+  'footer-value': 'string',
+  comment: 'comment',
   number: 'number',
-  symbol: 'string',
-  word: 'string',
-  whitespace: 'string',
+  'issue-reference': 'function',
+  punctuation: null,
+  word: null,
+  whitespace: null,
 }
-
-// client way
-// export const semanticTokensLegend = new SemanticTokensLegend(
-//   Object.values(tokenMap),
-//   standardModifiers.map((x) => x)
-// )
 
 export class SemanticTokensProvider {
   private readonly tokensBuilders: Map<string, SemanticTokensBuilder> =
@@ -92,28 +85,34 @@ export class SemanticTokensProvider {
   public legend: SemanticTokensLegend | undefined
   private tokenNumberMap: { [P in parser.NodeType]: number } | undefined
 
-  constructor(private readonly documents: TextDocuments<TextDocument>) {
-    documents.onDidClose((event) => {
-      this.tokensBuilders.delete(event.document.uri)
+  constructor(private readonly commitMessageProvider: CommitMessageProvider) {
+    commitMessageProvider.addDocumentDidCloseListener((documentUri) => {
+      this.tokensBuilders.delete(documentUri)
     })
   }
 
   setCapabilities(clientCapabilities: SemanticTokensClientCapabilities) {
-    console.log(clientCapabilities)
     const clientTokenTypes = new Set<string>(clientCapabilities.tokenTypes)
     const clientTokenModifiers = new Set<string>(
       clientCapabilities.tokenModifiers
     )
 
     const usedTokens = Object.fromEntries(
-      [...new Set<StandardToken>(Object.values(tokenMap))].map((token, idx) => [
-        token,
-        idx,
-      ])
+      [...new Set<StandardToken | null>(Object.values(tokenMap))]
+        .filter(
+          (standardToken): standardToken is StandardToken =>
+            standardToken !== null
+        )
+        .map((token, idx) => [token, idx])
     )
     const tokenNumberMap = Object.fromEntries(
-      Object.entries(tokenMap).map(([key, value]) => [key, usedTokens[value]])
+      Object.entries(tokenMap)
+        .filter((el): el is [string, StandardToken] => el[1] !== null)
+        .map(([key, value]) => [key, usedTokens[value]])
     ) as { [P in parser.NodeType]: number }
+
+    // TODO: only use token types if they are in client capabilities
+    // otherwise select sensible alternatives
 
     // const tokenTypes: string[] = [];
     // for (let i = 0; i < TokenTypes._; i++) {
@@ -142,13 +141,54 @@ export class SemanticTokensProvider {
     this.tokenNumberMap = tokenNumberMap
   }
 
-  getTokenBuilder(document: TextDocument): SemanticTokensBuilder {
-    const builder = this.tokensBuilders.get(document.uri)
+  getTokensBuilder(documentUri: string): SemanticTokensBuilder {
+    const builder = this.tokensBuilders.get(documentUri)
     if (builder) {
       return builder
     }
     const tokensBuilder = new SemanticTokensBuilder()
-    this.tokensBuilders.set(document.uri, tokensBuilder)
+    this.tokensBuilders.set(documentUri, tokensBuilder)
+    return tokensBuilder
+  }
+
+  buildTokens(
+    tokensBuilder: SemanticTokensBuilder,
+    tree: parser.Node
+  ): SemanticTokensBuilder {
+    const precedenceTypes: parser.NodeType[] = [
+      'type',
+      'scope',
+      // 'description',
+      // 'footer-token',
+      // 'footer-value',
+      // 'comment',
+      'breaking-change-literal',
+    ]
+
+    const availableTokens = Object.keys(this.tokenNumberMap!)
+
+    const hasChildren = (node: parser.Node): node is parser.InnerNode =>
+      'children' in node && node.children?.length > 0
+
+    const walk = (node: parser.Node) => {
+      if (availableTokens.includes(node.type)) {
+        tokensBuilder.push(
+          node.range.start.line,
+          node.range.start.character,
+          node.length,
+          this.tokenNumberMap![node.type],
+          0 // uses bitmask
+        )
+      }
+      if (!precedenceTypes.includes(node.type) && hasChildren(node)) {
+        for (const child of node.children) {
+          walk(child)
+        }
+      }
+    }
+
+    walk(tree)
+
     return tokensBuilder
   }
 
@@ -158,52 +198,26 @@ export class SemanticTokensProvider {
     workDoneProgress: WorkDoneProgressReporter,
     resultProgress?: ResultProgressReporter<SemanticTokensDeltaPartialResult>
   ): Promise<SemanticTokens | SemanticTokensDelta | ResponseError<void>> {
-    console.log('semantic token provider running')
     // analyze the document and return semantic tokens
 
     if (!this.tokenNumberMap) {
       return { edits: [] }
     }
 
-    const document = this.documents.get(params.textDocument.uri)
+    const tree = await this.commitMessageProvider.getParsedTreeForDocumentUri(
+      params.textDocument.uri
+    )
 
-    if (!document) {
+    if (!tree?.rootNode) {
       return { edits: [] }
     }
 
-    const tree = parser.parseTree(document.getText())
-
-    if (!tree) {
-      return { edits: [] }
-    }
-
-    const tokensBuilder = this.getTokenBuilder(document)
+    const tokensBuilder = this.getTokensBuilder(params.textDocument.uri)
     tokensBuilder.previousResult(params.previousResultId)
 
-    const precedenceTypes: parser.NodeType[] = ['type', 'scope', 'description']
+    const builtTokensBuilder = this.buildTokens(tokensBuilder, tree.rootNode)
 
-    const walk = (node: parser.Node) => {
-      if (
-        precedenceTypes.includes(node.type) ||
-        !node.children ||
-        node.children.length === 0
-      ) {
-        tokensBuilder.push(
-          node.range.start.line,
-          node.range.start.character,
-          node.length,
-          this.tokenNumberMap![node.type],
-          0 // uses bitmask
-        )
-      } else {
-        for (const child of node.children) {
-          walk(child)
-        }
-      }
-    }
-
-    walk(tree)
-    return tokensBuilder.buildEdits()
+    return builtTokensBuilder.buildEdits()
   }
 
   async on(
@@ -212,77 +226,23 @@ export class SemanticTokensProvider {
     workDoneProgress: WorkDoneProgressReporter,
     resultProgress?: ResultProgressReporter<SemanticTokensPartialResult>
   ): Promise<SemanticTokens | ResponseError<void>> {
-    console.log('semantic token provider running')
     // analyze the document and return semantic tokens
 
     if (!this.tokenNumberMap) {
       return { data: [] }
     }
 
-    const document = this.documents.get(params.textDocument.uri)
+    const tree = await this.commitMessageProvider.getParsedTreeForDocumentUri(
+      params.textDocument.uri
+    )
 
-    if (!document) {
+    if (!tree?.rootNode) {
       return { data: [] }
     }
 
-    const tree = parser.parseTree(document.getText())
+    const tokensBuilder = this.getTokensBuilder(params.textDocument.uri)
 
-    if (!tree) {
-      return { data: [] }
-    }
-
-    const tokensBuilder = this.getTokenBuilder(document)
-
-    const precedenceTypes: parser.NodeType[] = ['type', 'scope', 'description']
-
-    const walk = (node: parser.Node) => {
-      if (
-        precedenceTypes.includes(node.type) ||
-        !node.children ||
-        node.children.length === 0
-      ) {
-        tokensBuilder.push(
-          node.range.start.line,
-          node.range.start.character,
-          node.length,
-          this.tokenNumberMap![node.type],
-          0 // uses bitmask
-        )
-      } else {
-        for (const child of node.children) {
-          walk(child)
-        }
-      }
-    }
-
-    walk(tree)
-    return tokensBuilder.build()
+    const builtTokensBuilder = this.buildTokens(tokensBuilder, tree.rootNode)
+    return builtTokensBuilder.build()
   }
-
-  // params.previousResultId
-  // const tokensBuilder = new SemanticTokensBuilder(semanticTokensLegend)
-  // const tokensData = tokensBuilder.build()
-  // const semanticTokensDelta: SemanticTokensDelta = {
-  //   edits: [
-  //     {
-  //       deleteCount: 0,
-  //       start: 0,
-  //       data: tokensData,
-  //     },
-  //   ],
-  // }
-  // const semanticTokens: SemanticTokens = {
-  //   data: tokensData,
-  // }
-
-  // if (Math.random() > 0.5) {
-  //   return semanticTokensDelta
-  // } else if (Math.random() > 0.5) {
-  //   return semanticTokensDelta
-  // }
-  // const responseError: ResponseError<void> = new ResponseError<void>(
-  //   123,
-  //   'Some error message'
-  // )
-  // return responseError
 }

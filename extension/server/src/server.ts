@@ -5,32 +5,44 @@ import {
   InitializeParams,
   DidChangeConfigurationNotification,
   CompletionItem,
-  CompletionItemKind,
   TextDocumentPositionParams,
   TextDocumentSyncKind,
   InitializeResult,
   SemanticTokensRegistrationOptions,
   SemanticTokensRegistrationType,
   Proposed,
-  CodeActionKind,
   LSPObject,
+  FileChangeType,
+  URI,
 } from 'vscode-languageserver/node'
 
 import { TextDocument } from 'vscode-languageserver-textdocument'
 
-import * as parser from 'git-commit-parser'
 import * as commitlint from './commitlint'
-import { loadConfig } from './commitlint-config'
 import { SemanticTokensProvider } from './semantic-tokens'
+import {
+  CommitMessageProvider,
+  PartialTextDocument,
+} from './commit-message-provider'
+import { CompletionProvider } from './completion-provider'
+import { GitService } from './git-service'
 
 // Create a connection for the server, using Node's IPC as a transport.
 // Also include all preview / proposed LSP features.
 const connection = createConnection(ProposedFeatures.all)
 
+export type Workspace = typeof connection['workspace']
+
 // Create a simple text document manager.
 const documents: TextDocuments<TextDocument> = new TextDocuments(TextDocument)
 
-const semanticTokensProvider = new SemanticTokensProvider(documents)
+const commitMessageProvider = new CommitMessageProvider(
+  documents,
+  connection.workspace
+)
+const gitService = new GitService()
+const semanticTokensProvider = new SemanticTokensProvider(commitMessageProvider)
+const completionProvider = new CompletionProvider(commitMessageProvider, gitService)
 
 let hasConfigurationCapability = false
 let hasWorkspaceFolderCapability = false
@@ -61,7 +73,7 @@ connection.onInitialize((params: InitializeParams) => {
     capabilities.textDocument.publishDiagnostics.relatedInformation
   )
 
-  let result: InitializeResult & { capabilities: Proposed.$DiagnosticServerCapabilities } = {
+  let result: InitializeResult = {
     capabilities: {
       textDocumentSync: TextDocumentSyncKind.Incremental,
       // hoverProvider: true,
@@ -119,7 +131,6 @@ connection.onInitialize((params: InitializeParams) => {
       // }
     },
   }
-
   return result
 })
 
@@ -135,6 +146,7 @@ connection.onInitialized((params) => {
     connection.workspace.onDidChangeWorkspaceFolders((_event) => {
       connection.console.log('Workspace folder change event received.')
     })
+    commitMessageProvider.enableWorkspaceFolderFeature()
   }
   const registrationOptions: SemanticTokensRegistrationOptions = {
     documentSelector: ['git-commit'],
@@ -179,6 +191,11 @@ connection.onDidChangeConfiguration((change) => {
   documents.all().forEach(validateTextDocument)
 })
 
+connection.onDefinition((params) => {
+  console.log('definition request', params)
+  return []
+})
+
 function getDocumentSettings(resource: string): Thenable<ExampleSettings> {
   if (!hasConfigurationCapability) {
     return Promise.resolve(globalSettings)
@@ -206,38 +223,40 @@ documents.onDidChangeContent((change) => {
   validateTextDocument(change.document)
 })
 
-async function validateTextDocument(textDocument: TextDocument): Promise<void> {
-  // TODO: do not reload config every time
-  const config = await loadConfig()
-
+async function validateTextDocument(
+  textDocument: PartialTextDocument
+): Promise<void> {
   // In this simple example we get the settings for every validate run.
   // const settings = await getDocumentSettings(textDocument.uri)
 
-  // The validator creates diagnostics for all uppercase words length 2 and more
-  const text = textDocument.getText()
+  const parsedTree = await commitMessageProvider.getParsedTreeForDocument(
+    textDocument
+  )
 
-  const rootNode = parser.parseTree(text)
-
-  if (!rootNode) {
-    console.warn(
-      `OnValidate: Could not parse tree from input ${text.slice(0, 50)}...`
-    )
+  if (!parsedTree) {
+    console.warn(`OnValidate: Could not parse tree from input`)
     return
   }
 
-  const { rules, ...options } = config
+  const config = await commitMessageProvider.getConfig(
+    parsedTree.config?.configUri,
+    textDocument.uri
+  )
+
+  const { rules, ...options } = config?.config ?? {}
 
   const { diagnostics, configErrors, semVerUpdate } = await commitlint.validate(
     {
-      parsedTree: rootNode,
-      commitMessage: text,
+      parsedTree: parsedTree.rootNode,
+      commitMessage: parsedTree.text,
       options,
       rules,
     }
   )
 
   const enrichedDiagnostics = diagnostics.map((diagnostic) => {
-    diagnostic.source = 'commitlint'
+    const source = ['commitlint', config?.configPath].filter(Boolean).join(':')
+    diagnostic.source = source
     return diagnostic
   })
 
@@ -276,9 +295,53 @@ async function validateTextDocument(textDocument: TextDocument): Promise<void> {
   })
 }
 
-connection.onDidChangeWatchedFiles((_change) => {
-  // Monitored files have change in VSCode
-  connection.console.log('We received an file change event')
+connection.onDidChangeWatchedFiles(async (change) => {
+  // taken from
+  // https://github.com/conventional-changelog/commitlint/blob/4682b059bb8c78c45f10960435c0bd01194421fa/%40commitlint/load/src/utils/load-config.ts#L17-L33
+  const commitlintConfigFileNames = [
+    'package.json',
+    `.commitlintrc`,
+    `.commitlintrc.json`,
+    `.commitlintrc.yaml`,
+    `.commitlintrc.yml`,
+    `.commitlintrc.js`,
+    `.commitlintrc.cjs`,
+    `commitlint.config.js`,
+    `commitlint.config.cjs`,
+    // files supported by TypescriptLoader
+    `.commitlintrc.ts`,
+    `commitlint.config.ts`,
+  ]
+
+  const createdConfigChanges =
+    change.changes
+      .filter((change) => change.type === FileChangeType.Created)
+      .map((change) => change.uri)
+      .filter((uri) =>
+        commitlintConfigFileNames.some((fileName) =>
+          uri.endsWith(`/${fileName}`)
+        )
+      ).length > 0
+
+  if (!createdConfigChanges) {
+    const changedConfigUris = change.changes
+      .map((change) => change.uri)
+      .filter((uri) =>
+        commitlintConfigFileNames.some((fileName) =>
+          uri.endsWith(`/${fileName}`)
+        )
+      )
+
+    await commitMessageProvider.configsChanged(changedConfigUris)
+  } else {
+    // invalidate all documents, as the new config could be used for any document
+    await commitMessageProvider.configCreated()
+  }
+
+  const documents = commitMessageProvider.getDocuments()
+
+  // re-evaluate diagnostics
+  await Promise.all(documents.map((document) => validateTextDocument(document)))
 })
 
 // connection.onDidOpenTextDocument((handler) => {
@@ -300,119 +363,24 @@ connection.languages.semanticTokens.onDelta(
     )
 )
 
-// This handler provides the initial list of the completion items.
 connection.onCompletion(
-  (textDocumentPosition: TextDocumentPositionParams): CompletionItem[] => {
-    // The pass parameter contains the position of the text document in
-    // which code complete got requested. For the example we ignore this
-    // info and always provide the same completion items.
-
-    const document = documents.get(textDocumentPosition.textDocument.uri)
-    if (!document) {
-      return []
-    }
-
-    const parsed = parser.parseTree(document.getText())
-
-    const offset = document.offsetAt(textDocumentPosition.position)
-
-    return getCompletions(parsed, offset)
+  (
+    textDocumentPosition: TextDocumentPositionParams
+  ): Promise<CompletionItem[]> => {
+    return completionProvider.provideCompletion(textDocumentPosition)
   }
 )
 
-function getCompletions(rootNode: parser.Node | undefined, offset: number) {
-  if (!rootNode) {
-    return []
+connection.onCompletionResolve((item) =>
+  completionProvider.resolveCompletion(item)
+)
+
+connection.onNotification(
+  'gitCommit/repoUris',
+  (repoUrisData: { repoUris: URI[] }) => {
+    gitService.setRepoUris(repoUrisData?.repoUris)
   }
-
-  const node = parser.findNodeAtOffset(rootNode, offset, true)
-
-  if (!node) {
-    return []
-  }
-
-  const completions: { [key: string]: CompletionItem[] } = {
-    type: [
-      {
-        label: 'feat',
-        kind: CompletionItemKind.Field,
-      },
-      {
-        label: 'fix',
-        kind: CompletionItemKind.Field,
-      },
-      {
-        label: 'refactor',
-        kind: CompletionItemKind.Field,
-      },
-    ],
-  }
-
-  const completionItemKeys = Object.keys(completions)
-
-  let upNode: parser.Node | undefined = node
-  while (upNode) {
-    if (completionItemKeys.includes(upNode.type)) {
-      return completions[upNode.type]
-    }
-    upNode = upNode.parent
-  }
-  return []
-}
-
-// This handler resolves additional information for the item selected in
-// the completion list.
-connection.onCompletionResolve((item: CompletionItem): CompletionItem => {
-  if (item.data === 1) {
-    item.detail = 'TypeScript details'
-    item.documentation = 'TypeScript documentation'
-  } else if (item.data === 2) {
-    item.detail = 'JavaScript details'
-    item.documentation = 'JavaScript documentation'
-  }
-  return item
-})
-
-// let tokenBuilders: Map<string, SemanticTokensBuilder> = new Map();
-// documents.onDidClose((event) => {
-// 	tokenBuilders.delete(event.document.uri);
-// });
-// function getTokenBuilder(document: TextDocument): SemanticTokensBuilder {
-// 	const builder = tokenBuilders.get(document.uri);
-// 	if (builder !== undefined) {
-// 		return builder;
-// 	}
-// 	const newBuilder = new SemanticTokensBuilder();
-// 	tokenBuilders.set(document.uri, newBuilder);
-// 	return newBuilder;
-// }
-// function buildTokens(builder: SemanticTokensBuilder, document: TextDocument) {
-// 	const text = document.getText();
-// 	const regexp = /\w+/g;
-// 	let match: RegExpMatchArray | null = regexp.exec(text);
-// 	let tokenCounter: number = 0;
-// 	let modifierCounter: number = 0;
-// 	while (match !== null && match.index !== undefined) {
-// 		const word = match[0];
-// 		const position = document.positionAt(match.index);
-// 		const tokenType = tokenCounter % TokenTypes._;
-// 		const tokenModifier = 1 << modifierCounter % TokenModifiers._;
-// 		builder.push(position.line, position.character, word.length, tokenType, tokenModifier);
-// 		tokenCounter++;
-// 		modifierCounter++;
-//     match = regexp.exec(text)
-// 	}
-// }
-// connection.languages.semanticTokens.onDelta((params) => {
-// 	const document = documents.get(params.textDocument.uri);
-// 	if (document === undefined) {
-// 		return { edits: [] };
-// 	}
-// 	const builder = getTokenBuilder(document);
-// 	builder.previousResult(params.previousResultId);
-// 	buildTokens(builder, document);
-// 	return builder.buildEdits();
-// });
+)
 
 // Make the text document manager listen on the connection
 // for open, change and close text document events

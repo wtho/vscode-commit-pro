@@ -6,10 +6,12 @@ import {
   ServerOptions,
   TransportKind,
 } from 'vscode-languageclient/node'
+import { OpenEditorCommand } from './command-open-editor'
+import { GitClientService } from './git-client-service'
 
 let client: LanguageClient
 
-workspace.onDidOpenTextDocument(doc => {
+workspace.onDidOpenTextDocument((doc) => {
   const text = doc.getText()
   const docFirstLineIsEmpty = text.length === 0 || text.startsWith('\n')
   if (doc.languageId === 'git-commit' && docFirstLineIsEmpty) {
@@ -17,7 +19,7 @@ workspace.onDidOpenTextDocument(doc => {
   }
 })
 
-export function activate(context: ExtensionContext) {
+export async function activate(context: ExtensionContext) {
   // context.subscriptions.push()
 
   // The server is implemented in node
@@ -39,6 +41,26 @@ export function activate(context: ExtensionContext) {
     },
   }
 
+  // taken from
+  // https://github.com/conventional-changelog/commitlint/blob/4682b059bb8c78c45f10960435c0bd01194421fa/%40commitlint/load/src/utils/load-config.ts#L17-L33
+  const commitlintConfigFileNames = [
+    'package.json',
+    `.commitlintrc`,
+    `.commitlintrc.json`,
+    `.commitlintrc.yaml`,
+    `.commitlintrc.yml`,
+    `.commitlintrc.js`,
+    `.commitlintrc.cjs`,
+    `commitlint.config.js`,
+    `commitlint.config.cjs`,
+    // files supported by TypescriptLoader
+    `.commitlintrc.ts`,
+    `commitlint.config.ts`,
+  ]
+  const commitlintConfigFileGlobPattern = `**/{${commitlintConfigFileNames.join(
+    ','
+  )}}`
+
   // Options to control the language client
   const clientOptions: LanguageClientOptions = {
     // Register the server for plain text documents
@@ -47,11 +69,26 @@ export function activate(context: ExtensionContext) {
       { language: 'git-commit', scheme: 'untitled' },
     ],
     synchronize: {
-      // Notify the server about file changes to '.clientrc files contained in the workspace
-      // fileEvents: workspace.createFileSystemWatcher('**/.clientrc')
-      // TODO: notify about commitlint changes
+      // Notify the server about file changes to commiltlint config files contained in the workspace
+      fileEvents: workspace.createFileSystemWatcher(
+        commitlintConfigFileGlobPattern
+      ),
     },
   }
+
+  const gitClientService = new GitClientService()
+
+  const openEditorCommand = new OpenEditorCommand(gitClientService)
+
+  context.subscriptions.push(
+    commands.registerCommand(
+      'todorename.editor.command.openEditor',
+      async () => {
+        const repoUris = await gitClientService.getRepoUris()
+        openEditorCommand.run(repoUris)
+      }
+    )
+  )
 
   // Create the language client and start the client.
   client = new LanguageClient(
@@ -61,8 +98,21 @@ export function activate(context: ExtensionContext) {
     clientOptions
   )
 
+  client.onReady().then(async () => {
+    // this sometimes fires after onDidChangeRepostories
+    const repoUris = await gitClientService.getRepoUris()
+    if (repoUris.length > 0) {
+      client.sendNotification('gitCommit/repoUris', { repoUris: repoUris })
+    }
+  })
+
+  gitClientService.onDidChangeRepositories((uris) => {
+    client.sendNotification('gitCommit/repoUris', { repoUris: uris })
+  })
+
   // Start the client. This will also launch the server
-  client.start()
+  context.subscriptions.push(client.start())
+  console.log('client::started')
 }
 
 export function deactivate(): Thenable<void> | undefined {
