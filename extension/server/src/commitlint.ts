@@ -37,12 +37,12 @@ const messageSemVerUpdateStateNoUpdate: MessageSemVerUpdateState = {
 }
 
 export const validate = async ({
-  parsedTree,
+  parsedRootNode: parsedTree,
   commitMessage,
   rules = {},
   options,
 }: {
-  parsedTree: parser.Node | undefined
+  parsedRootNode: parser.Node | undefined
   commitMessage: string | undefined
   rules?: Partial<RulesConfig<RuleConfigQuality.Qualified>>,
   options?: LintOptions

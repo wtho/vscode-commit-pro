@@ -1,5 +1,5 @@
-import { parseTreeFullMessage } from "./parser-full-message"
-import { LineWiseNode, parseTreeLineWise } from "./parser-line-wise"
+import { parseTreeFullMessage } from './parser-full-message'
+import { LineWiseNode, parseTreeLineWise } from './parser-line-wise'
 
 export interface ParseOptions {
   issuePrefixes?: string[]
@@ -110,7 +110,6 @@ export interface Range {
   readonly end: Position
 }
 
-
 export type NodeValueType = string | number | boolean | null | unknown
 
 export type Node = ValueNode<NodeValueType> | InnerNode
@@ -132,22 +131,98 @@ export interface InnerNode {
   readonly children: Node[]
 }
 
-export function parseTree(
+export interface ParseOutcome {
+  root: Node | undefined
+  errors: ParseError[]
+  raw: string
+  header:
+    | {
+        raw: string
+        type: string | undefined
+        scope: string | undefined
+        breakingExclamationMark: boolean
+        description: string | undefined
+      }
+    | undefined
+  body: string | undefined
+  footers: {
+    raw: string
+    token: string
+    value: string
+  }[]
+}
+
+export function parseCommit(
   text: string,
   parseOptions: ParseOptions = DEFAULT_PARSE_OPTIONS
-): { root: Node | undefined; errors: ParseError[] } {
+): ParseOutcome {
   const options = {
     ...DEFAULT_PARSE_OPTIONS,
-    ...(parseOptions ?? {})
+    ...(parseOptions ?? {}),
   }
 
-  const { root: parsedLineWise, errors: parseErrorsLineWise } = parseTreeLineWise(text, options)
+  const isMessage = (node: Node | undefined): node is InnerNode =>
+    node?.type === 'message'
+  const isHeader = (node: Node | undefined): node is InnerNode =>
+    node?.type === 'header'
+  const isBody = (node: Node | undefined): node is InnerNode =>
+    node?.type === 'body'
+  const isFooter = (node: Node | undefined): node is InnerNode =>
+    node?.type === 'footer'
 
-  const { root: parsedFullMessage, errors: parseErrorsFullMessage } = parseTreeFullMessage(parsedLineWise, options)
+  const { root: parsedLineWise, errors: parseErrorsLineWise } =
+    parseTreeLineWise(text, options)
+
+  const { root: parsedFullMessage, errors: parseErrorsFullMessage } =
+    parseTreeFullMessage(parsedLineWise, options)
+
+  let header: ParseOutcome['header']
+  let body: ParseOutcome['body']
+  let footers: ParseOutcome['footers'] = []
+
+  if (isMessage(parsedFullMessage)) {
+    for (const child of parsedFullMessage.children) {
+      if (isHeader(child)) {
+        header = {
+          raw: getStringContentOfNode(child),
+          type: getStringContentOfNode(
+            child.children.find(({ type }) => type === 'type')
+          ),
+          scope: getStringContentOfNode(
+            child.children.find(({ type }) => type === 'scope')
+          ),
+          breakingExclamationMark: child.children.some(
+            ({ type }) => type === 'breaking-exclamation-mark'
+          ),
+          description: getStringContentOfNode(
+            child.children.find(({ type }) => type === 'description')
+          ),
+        }
+      }
+      if (isBody(child)) {
+        body = getStringContentOfNode(child)
+      }
+      if (isFooter(child)) {
+        footers.push({
+          raw: getStringContentOfNode(child),
+          token: getStringContentOfNode(
+            child.children.find(({ type }) => type === 'footer-token')
+          ),
+          value: getStringContentOfNode(
+            child.children.find(({ type }) => type === 'footer-value')
+          ),
+        })
+      }
+    }
+  }
 
   return {
     root: parsedFullMessage,
     errors: [...parseErrorsLineWise, ...parseErrorsFullMessage],
+    raw: text,
+    header,
+    body,
+    footers,
   }
 }
 
@@ -166,7 +241,9 @@ export function getFirstNodeOfType(
       return sectionNode
     }
   }
-  if (['type', 'scope', 'description', 'breaking-exclamation-mark'].includes(type)) {
+  if (
+    ['type', 'scope', 'description', 'breaking-exclamation-mark'].includes(type)
+  ) {
     // smart search in header
     const headerNode = rootNode.children?.find((node) => node.type === 'header')
     if (headerNode && 'children' in headerNode && headerNode.children?.length) {
@@ -204,7 +281,7 @@ export function getFirstNodeOfType(
 }
 
 export function getStringContentOfNode(
-  node: Node | LineWiseNode | undefined,
+  node: Node | LineWiseNode | undefined
 ): string {
   if (!node) {
     return ''
@@ -213,7 +290,7 @@ export function getStringContentOfNode(
     return node.value as string
   }
   if ('children' in node) {
-    return node.children.map(child => getStringContentOfNode(child)).join('')
+    return node.children.map((child) => getStringContentOfNode(child)).join('')
   }
   return ''
 }
@@ -228,14 +305,16 @@ export function getRangeForCommitPosition(
     return node.range
   }
 
-  if (['type', 'scope', 'description', 'breaking-exclamation-mark'].includes(type)) {
+  if (
+    ['type', 'scope', 'description', 'breaking-exclamation-mark'].includes(type)
+  ) {
     // return first line
     return {
       start: { line: 0, character: 0 },
       end: { line: 0, character: Number.MAX_SAFE_INTEGER },
     }
   }
-  
+
   return {
     start: { line: 0, character: 0 },
     end: { line: 0, character: 0 },

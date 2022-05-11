@@ -1,51 +1,120 @@
-import { Uri, window, commands } from 'vscode'
+import type { ChildProcess, ExecException, ExecOptions } from 'child_process'
+import * as url from 'url'
+import { Disposable } from 'vscode-languageclient'
 
-type GitService = any
+async function runWithShell(
+  command: string,
+  args: ReadonlyArray<string>,
+  options: ExecOptions,
+  callback?: (
+    error: ExecException | null,
+    stdout: string,
+    stderr: string
+  ) => void
+): Promise<ChildProcess> {
+  const childProcess = await import('child_process')
 
-interface GitUri {
-  rootUri: Uri
+  const fullCommand = [command, ...args].join(' ')
+
+  return childProcess.exec(fullCommand, options, callback)
 }
 
-function isGitUri(arg: GitUri | unknown): arg is GitUri {
-  return (
-    typeof arg === 'object' &&
-    'rootUri' in arg &&
-    (arg as GitUri).rootUri instanceof Uri
+async function runWithoutShell(
+  command: string,
+  args: ReadonlyArray<string>,
+  callback?: (
+    error: ExecException | null,
+    stdout: string,
+    stderr: string
+  ) => void
+): Promise<ChildProcess> {
+  const childProcess = await import('child_process')
+
+  return childProcess.execFile(command, args, callback)
+}
+
+async function getCodeExecutive(): Promise<{
+  inPath: boolean
+  version: string | undefined
+}> {
+  return new Promise((resolve, reject) =>
+    runWithoutShell('code', ['-v'], (error, stdout, stderr) => {
+      if (error) {
+        resolve({ inPath: false, version: undefined })
+        return
+      }
+      resolve({
+        inPath: true,
+        // example output: "1.42.1\ndfd34e8260c270da74b5c2d86d61aee4b6d56977\nx64"
+        version: stdout.split('\n')[0].trim(),
+      })
+    })
+  )
+}
+
+async function getGitExecutive(): Promise<{
+  inPath: boolean
+  version: string | undefined
+}> {
+  return new Promise((resolve, reject) =>
+    runWithoutShell('git', ['--version'], (error, stdout, stderr) => {
+      if (error) {
+        resolve({ inPath: false, version: undefined })
+        return
+      }
+      resolve({
+        inPath: true,
+        // example output: "git version 1.42.1"
+        version: stdout.slice('git version '.length).trim(),
+      })
+    })
+  )
+}
+
+async function startGitCodeWait(folder: string): Promise<string> {
+  return new Promise((resolve, reject) =>
+    runWithShell(
+      'git',
+      ['-c', 'core.editor="code --wait"', 'commit'],
+      { cwd: folder },
+      (error, stdout, stderr) => {
+        if (error) {
+          reject(new Error(stderr))
+          return
+        }
+        resolve(stdout)
+      }
+    )
   )
 }
 
 export class OpenEditorCommand {
-  public readonly id = 'todorename.editor.command.openEditor'
+  public readonly command = 'commitPro.editor.command.openEditor'
 
-  constructor(
-    private readonly gitService: GitService,
-    private readonly fileScheme: string = 'git-commit',
-  ) {}
+  public async run(gitUris: string[]): Promise<void> {
+    const [gitExecutive, codeExecutive] = await Promise.all([
+      getGitExecutive(),
+      getCodeExecutive(),
+    ])
 
-  public async run(arg: GitUri | unknown): Promise<void> {
-    if (this.gitService.api === undefined) return
-
-    let repoRootUri: Uri | undefined = undefined
-
-    if (isGitUri(arg)) {
-      repoRootUri = arg.rootUri
-    } else {
-      const uri = window.activeTextEditor?.document.uri
-      const repository =
-        this.gitService.getRepository?.(uri) ??
-        this.gitService.api?.repositories.find((e) => e.ui.selected) ??
-        this.gitService.api?.repositories[0]
-
-      repoRootUri = repository?.rootUri
+    if (!gitExecutive.inPath) {
+      // TODO notification
+    }
+    if (!codeExecutive.inPath) {
+      // TODO notification
     }
 
-    if (repoRootUri === undefined) return
+    if (!gitExecutive.inPath || !codeExecutive.inPath) {
+      return
+    }
 
-    const path = repoRootUri.path + '/.git/COMMIT_EDITMSG'
-    const uri = Uri.file(path).with({ scheme: this.fileScheme })
-
-    return commands.executeCommand('vscode.open', uri, {
-      preview: false,
-    })
+    const folder = url.fileURLToPath(gitUris[0])
+    try {
+      const resultMessage = await startGitCodeWait(folder)
+      console.log({ resultMessage })
+    } catch (err) {
+      console.error({ err })
+      // TODO: notification
+    }
   }
 }

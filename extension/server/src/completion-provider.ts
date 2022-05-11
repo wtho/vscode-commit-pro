@@ -42,13 +42,13 @@ export class CompletionProvider {
   ): Promise<CompletionItem[]> {
     const documentUri = textDocumentPosition.textDocument.uri
 
-    const parsedTree =
+    const parsedCommit =
       await this.commitMessageProvider.getParsedTreeForDocumentUri(documentUri)
-    if (!parsedTree) {
+    if (!parsedCommit) {
       return []
     }
     const configSet = await this.commitMessageProvider.getConfig(
-      parsedTree.config?.configUri,
+      parsedCommit.config?.configUri,
       documentUri
     )
     const offset = this.commitMessageProvider.offsetAtPosition(
@@ -56,9 +56,10 @@ export class CompletionProvider {
       textDocumentPosition.position
     )
 
-    const rootNode = parsedTree.rootNode
+    const parseOutcome = parsedCommit.parseOutcome
+    const rootNode = parseOutcome?.root
 
-    if (!rootNode) {
+    if (!parseOutcome || !rootNode) {
       return []
     }
 
@@ -75,7 +76,7 @@ export class CompletionProvider {
       scope: () => this.getCompletionScopes(configSet, rootNode),
       'scope-paren-open': () => this.getCompletionScopes(configSet, rootNode),
       'scope-paren-close': () =>
-        this.getCompletionBreakingExclamationMark(configSet, rootNode),
+        this.getCompletionBreakingExclamationMark(configSet, parseOutcome),
     }
 
     const completionItemKeys = Object.keys(completions)
@@ -175,15 +176,12 @@ export class CompletionProvider {
 
   getCompletionBreakingExclamationMark(
     configSet: ConfigSet,
-    root: parser.Node
+    parseOutcome: parser.ParseOutcome
   ): CompletionItem[] {
     // TODO: check if breaking exclamation mark is not wanted
 
     // check if breaking exclamation mark is already there
-    const existingBreakingExclamationMark = parser.getFirstNodeOfType(
-      root,
-      'breaking-exclamation-mark'
-    )
+    const existingBreakingExclamationMark = parseOutcome.header?.breakingExclamationMark
     if (existingBreakingExclamationMark) {
       return []
     }
@@ -202,7 +200,6 @@ export class CompletionProvider {
   // This handler resolves additional information for the item selected in
   // the completion list.
   resolveCompletion(item: CompletionItem): CompletionItem {
-    console.log('resolve', item)
     if (item.label === 'fantasy') {
       item.detail = 'Fantasy details'
       item.documentation = 'Fantasy documentation'

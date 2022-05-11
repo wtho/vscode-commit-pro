@@ -76,13 +76,15 @@ export async function activate(context: ExtensionContext) {
     },
   }
 
+
   const gitClientService = new GitClientService()
 
-  const openEditorCommand = new OpenEditorCommand(gitClientService)
+  const openEditorCommand = new OpenEditorCommand()
 
   context.subscriptions.push(
+    gitClientService,
     commands.registerCommand(
-      'todorename.editor.command.openEditor',
+      openEditorCommand.command,
       async () => {
         const repoUris = await gitClientService.getRepoUris()
         openEditorCommand.run(repoUris)
@@ -98,21 +100,29 @@ export async function activate(context: ExtensionContext) {
     clientOptions
   )
 
-  client.onReady().then(async () => {
-    // this sometimes fires after onDidChangeRepostories
-    const repoUris = await gitClientService.getRepoUris()
-    if (repoUris.length > 0) {
-      client.sendNotification('gitCommit/repoUris', { repoUris: repoUris })
+  gitClientService.event((event) => {
+    if (event.type === 'repository-update') {
+      client.sendNotification('gitCommit/repoUpdate', event)
+    } else if (event.type === 'repository-close') {
+      client.sendNotification('gitCommit/repoClose', event)
     }
-  })
-
-  gitClientService.onDidChangeRepositories((uris) => {
-    client.sendNotification('gitCommit/repoUris', { repoUris: uris })
   })
 
   // Start the client. This will also launch the server
   context.subscriptions.push(client.start())
-  console.log('client::started')
+
+  await client.onReady()
+
+  context.subscriptions.push(
+    client.onNotification('gitCommit/requestRepoCommits', async (event) => {
+      try {
+        const commitData = await gitClientService.getCommitData(event.uri, event.commitIds)
+        client.sendNotification('gitCommit/repoCommits', commitData)
+      } catch { /* it's ok, server is outdated and is already getting notified */}
+    })
+  )
+
+  gitClientService.fireInitialRepoUpdates()
 }
 
 export function deactivate(): Thenable<void> | undefined {

@@ -1,19 +1,19 @@
 {
 	"name": "vscode-conventional-commits-extension-client",
-  "version": "0.1.0",
-  "description": "Author your Commit Message like your Code",
-  "keywords": [
-    "vscode",
-    "conventional-commits",
-    "commit",
-    "git"
-  ],
-  "author": "Thomas Wirth <thomas@wtho.de>",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/wtho/vscode-conventional-commits.git"
-  },
+	"version": "0.1.0",
+	"description": "Author your Commit Message like your Code",
+	"keywords": [
+		"vscode",
+		"conventional-commits",
+		"commit",
+		"git"
+	],
+	"author": "Thomas Wirth <thomas@wtho.de>",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/wtho/vscode-conventional-commits.git"
+	},
 	"engines": {
 		"vscode": "^1.63.0"
 	},

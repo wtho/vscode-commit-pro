@@ -5,8 +5,8 @@ import { Workspace } from './server'
 import { Config, loadConfig } from './commitlint-config'
 import * as url from 'url'
 
-export interface ParsedTree {
-  rootNode?: parser.Node
+export interface ParsedCommit {
+  parseOutcome?: parser.ParseOutcome
   version: number
   text: string
   config: null | {
@@ -36,7 +36,7 @@ export class CommitMessageProvider {
   private readonly documentDidCloseEventListeners: ((
     documentUri: string
   ) => void)[] = []
-  private readonly parsedMessages = new Map<DocumentUri, ParsedTree>()
+  private readonly parsedMessages = new Map<DocumentUri, ParsedCommit>()
   private readonly loadedConfigurations = new Map<ConfigurationUri, ConfigSet>()
 
   constructor(
@@ -99,7 +99,7 @@ export class CommitMessageProvider {
   async getParsedTreeForDocument(
     document: PartialTextDocument,
     options?: { forceReload?: boolean }
-  ): Promise<ParsedTree | undefined> {
+  ): Promise<ParsedCommit | undefined> {
     const currentDocumentVersion = document.version
     const treeForDocumentUri = this.parsedMessages.get(document.uri)
 
@@ -122,14 +122,14 @@ export class CommitMessageProvider {
     messagesForConfig.add(document.uri)
 
     const documentText = document.getText()
-    const { root: rootNode } = parser.parseTree(documentText, {
+    const parseOutcome = parser.parseCommit(documentText, {
       ...(config.parserOpts ?? {}),
       strict: false,
     })
-    const parsedTree: ParsedTree = {
+    const parsedTree: ParsedCommit = {
       version: currentDocumentVersion,
       text: documentText,
-      rootNode,
+      parseOutcome,
       config: { configUri },
     }
     this.parsedMessages.set(document.uri, parsedTree)
@@ -139,7 +139,7 @@ export class CommitMessageProvider {
   async getParsedTreeForDocumentUri(
     documentUri: string,
     options?: { forceReload?: boolean }
-  ): Promise<ParsedTree | undefined> {
+  ): Promise<ParsedCommit | undefined> {
     const document = this.documents.get(documentUri)
 
     if (!document) {

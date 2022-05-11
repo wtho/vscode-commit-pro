@@ -50,7 +50,7 @@
     },
     "commands": [
       {
-        "command": "todorename.editor.command.openEditor",
+        "command": "commitPro.editor.command.openEditor",
         "title": "Open Commit Message Editor",
         "category": "Git",
         "icon": "$(edit)"
@@ -59,19 +59,19 @@
     "menus": {
       "commandPalette": [
         {
-          "command": "todorename.editor.command.openEditor",
+          "command": "commitPro.editor.command.openEditor",
           "when": "config.git.enabled && !git.missing && gitOpenRepositoryCount != 0"
         }
       ],
       "scm/title": [
         {
-          "command": "todorename.editor.command.openEditor",
+          "command": "commitPro.editor.command.openEditor",
           "group": "navigation@1",
           "title": "Edit",
           "when": "scmProvider == git"
         },
         {
-          "command": "todorename.editor.command.openEditor",
+          "command": "commitPro.editor.command.openEditor",
           "group": "inline",
           "title": "Edit",
           "when": "scmProvider == git"

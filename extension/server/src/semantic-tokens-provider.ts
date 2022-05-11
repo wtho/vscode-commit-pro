@@ -16,6 +16,8 @@ import {
 } from 'vscode-languageserver/node'
 import { CommitMessageProvider } from './commit-message-provider'
 
+const range = (start: number, end: number) => Array.from({length: end - start}, (_, i) => i + start)
+
 const standardTokens = [
   'namespace',
   'class',
@@ -172,13 +174,19 @@ export class SemanticTokensProvider {
 
     const walk = (node: parser.Node) => {
       if (availableTokens.includes(node.type)) {
-        tokensBuilder.push(
-          node.range.start.line,
-          node.range.start.character,
-          node.length,
-          this.tokenNumberMap![node.type],
-          0 // uses bitmask
-        )
+        // multiline tokens are not supported by vscode
+        // create multiple tokens for each line
+        range(node.range.start.line, node.range.end.line + 1).map(lineIdx => {
+          const lineOffset = lineIdx === node.range.start.line ? node.range.start.character : 0
+          const lineEndOffset = lineIdx === node.range.end.line ? node.range.end.character : Number.MAX_SAFE_INTEGER
+          tokensBuilder.push(
+            lineIdx,
+            lineOffset,
+            lineEndOffset - lineOffset,
+            this.tokenNumberMap![node.type],
+            0 // uses bitmask
+          )
+        })
       }
       if (!precedenceTypes.includes(node.type) && hasChildren(node)) {
         for (const child of node.children) {
@@ -204,18 +212,18 @@ export class SemanticTokensProvider {
       return { edits: [] }
     }
 
-    const tree = await this.commitMessageProvider.getParsedTreeForDocumentUri(
+    const parsed = await this.commitMessageProvider.getParsedTreeForDocumentUri(
       params.textDocument.uri
     )
 
-    if (!tree?.rootNode) {
+    if (!parsed?.parseOutcome?.root) {
       return { edits: [] }
     }
 
     const tokensBuilder = this.getTokensBuilder(params.textDocument.uri)
     tokensBuilder.previousResult(params.previousResultId)
 
-    const builtTokensBuilder = this.buildTokens(tokensBuilder, tree.rootNode)
+    const builtTokensBuilder = this.buildTokens(tokensBuilder, parsed.parseOutcome.root)
 
     return builtTokensBuilder.buildEdits()
   }
@@ -232,17 +240,17 @@ export class SemanticTokensProvider {
       return { data: [] }
     }
 
-    const tree = await this.commitMessageProvider.getParsedTreeForDocumentUri(
+    const parsed = await this.commitMessageProvider.getParsedTreeForDocumentUri(
       params.textDocument.uri
     )
 
-    if (!tree?.rootNode) {
+    if (!parsed?.parseOutcome?.root) {
       return { data: [] }
     }
 
     const tokensBuilder = this.getTokensBuilder(params.textDocument.uri)
 
-    const builtTokensBuilder = this.buildTokens(tokensBuilder, tree.rootNode)
+    const builtTokensBuilder = this.buildTokens(tokensBuilder, parsed.parseOutcome.root)
     return builtTokensBuilder.build()
   }
 }

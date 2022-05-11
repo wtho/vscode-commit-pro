@@ -1,8 +1,9 @@
 export type { ParseOptions, NodeType, Node, InnerNode, Range } from './parser'
 export {
-  parseTree,
+  parseCommit,
   getRangeForCommitPosition,
   getFirstNodeOfType,
   getStringContentOfNode,
   findNodeAtOffset,
+  ParseOutcome
 } from './parser'

@@ -19,13 +19,18 @@ import {
 import { TextDocument } from 'vscode-languageserver-textdocument'
 
 import * as commitlint from './commitlint'
-import { SemanticTokensProvider } from './semantic-tokens'
+import { SemanticTokensProvider } from './semantic-tokens-provider'
 import {
   CommitMessageProvider,
   PartialTextDocument,
 } from './commit-message-provider'
 import { CompletionProvider } from './completion-provider'
-import { GitService } from './git-service'
+import {
+  BaseCommit,
+  GitClientRepositoryCloseEvent,
+  GitClientRepostoryUpdateEvent,
+  GitService,
+} from './git-service'
 
 // Create a connection for the server, using Node's IPC as a transport.
 // Also include all preview / proposed LSP features.
@@ -42,7 +47,10 @@ const commitMessageProvider = new CommitMessageProvider(
 )
 const gitService = new GitService()
 const semanticTokensProvider = new SemanticTokensProvider(commitMessageProvider)
-const completionProvider = new CompletionProvider(commitMessageProvider, gitService)
+const completionProvider = new CompletionProvider(
+  commitMessageProvider,
+  gitService
+)
 
 let hasConfigurationCapability = false
 let hasWorkspaceFolderCapability = false
@@ -182,8 +190,7 @@ connection.onDidChangeConfiguration((change) => {
     documentSettings.clear()
   } else if (typeof change.settings === 'object') {
     globalSettings = <ExampleSettings>(
-      ((change.settings as LSPObject)['languageServerExample'] ||
-        defaultSettings)
+      ((change.settings as any)['languageServerExample'] || defaultSettings)
     )
   }
 
@@ -247,7 +254,7 @@ async function validateTextDocument(
 
   const { diagnostics, configErrors, semVerUpdate } = await commitlint.validate(
     {
-      parsedTree: parsedTree.rootNode,
+      parsedRootNode: parsedTree.parseOutcome?.root,
       commitMessage: parsedTree.text,
       options,
       rules,
@@ -376,9 +383,30 @@ connection.onCompletionResolve((item) =>
 )
 
 connection.onNotification(
-  'gitCommit/repoUris',
-  (repoUrisData: { repoUris: URI[] }) => {
-    gitService.setRepoUris(repoUrisData?.repoUris)
+  'gitCommit/repoUpdate',
+  (event: GitClientRepostoryUpdateEvent) => {
+    const { commitIds, uri } = gitService.updateRepo(event.uri, event)
+    if (commitIds.length === 0) {
+      return
+    }
+    connection.sendNotification('gitCommit/requestRepoCommits', {
+      uri,
+      commitIds,
+    })
+  }
+)
+
+connection.onNotification(
+  'gitCommit/repoCommits',
+  (event: { uri: string; commits: BaseCommit[] }) => {
+    gitService.addRepoCommits(event.uri, event.commits)
+  }
+)
+
+connection.onNotification(
+  'gitCommit/repoClose',
+  (event: GitClientRepositoryCloseEvent) => {
+    gitService.closeRepo(event.uri)
   }
 )
 
