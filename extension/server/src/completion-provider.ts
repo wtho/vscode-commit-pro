@@ -9,12 +9,12 @@ import * as parser from 'git-commit-parser'
 import { GitService } from './git-service'
 
 const getNewTextEdit = (rootNode: parser.Node, nodeType: parser.NodeType) => {
-  const typeNode = parser.getRangeForCommitPosition(rootNode, nodeType)
-  const textEdit: Omit<TextEdit, 'newText'> | undefined = typeNode
+  const node = parser.getRangeForCommitPosition(rootNode, nodeType)
+  const textEdit: Omit<TextEdit, 'newText'> | undefined = node
     ? {
         range: {
-          start: typeNode.start,
-          end: typeNode.end,
+          start: node.start,
+          end: node.end,
         },
       }
     : undefined
@@ -72,7 +72,7 @@ export class CompletionProvider {
     const completions: {
       [key: string]: () => CompletionItem[] | Promise<CompletionItem[]>
     } = {
-      type: () => this.getCompletionTypes(configSet, rootNode),
+      type: () => this.getCompletionTypes(configSet, rootNode, parseOutcome),
       scope: () => this.getCompletionScopes(configSet, rootNode),
       'scope-paren-open': () => this.getCompletionScopes(configSet, rootNode),
       'scope-paren-close': () =>
@@ -93,40 +93,73 @@ export class CompletionProvider {
 
   async getCompletionTypes(
     configSet: ConfigSet,
-    root: parser.Node
+    root: parser.Node,
+    parseOutcome: parser.ParseOutcome
   ): Promise<CompletionItem[]> {
-    // TODO: check if rule is always applied
     const typeEnumRule = configSet?.config?.rules?.['type-enum']
+    const ruleDisabled = (typeEnumRule?.[0] ?? 0) === 0
+    const ruleAlways = typeEnumRule?.[1] === 'always'
     const typeEnumValues = typeEnumRule?.[2] ?? []
-    if (typeEnumValues.length > 0) {
+    if (!ruleDisabled && ruleAlways && typeEnumValues.length > 0) {
       const textEditForNewText = getNewTextEdit(root, 'type')
-      return typeEnumValues.map((type) => ({
-        label: type,
-        kind: CompletionItemKind.Enum,
-        // TODO: documentation
-        // TODO: detail
-        // TODO: labelDetails
-        // TODO: sortText to ensure order from config
-        textEdit: textEditForNewText(type),
-      }))
+      const hasScope = !!parseOutcome.header?.scope
+      const hasBreakingExclamationMark =
+        !!parseOutcome.header?.breakingExclamationMark
+      return typeEnumValues
+        .map((type) => ({
+          label: type,
+          kind: CompletionItemKind.Enum,
+          // TODO: documentation
+          // TODO: detail
+          // TODO: labelDetails
+          // TODO: sortText to ensure order from config
+          textEdit: textEditForNewText(type),
+        }))
+        .flatMap((completion) => {
+          if (
+            !hasScope &&
+            !hasBreakingExclamationMark &&
+            completion.label === parseOutcome.header?.type
+          ) {
+            // if this label is already fully written-out, offer the same with breaking exclamation mark
+            return [
+              completion,
+              {
+                ...completion,
+                // TODO: documentation
+                // TODO: detail
+                // TODO: labelDetails
+                label: `${completion.label}!`,
+                kind: CompletionItemKind.Operator,
+                textEdit: textEditForNewText(`${completion.label}!`),
+              },
+            ]
+          }
+          return [completion]
+        })
     }
 
     // get types from history
     if (configSet.workspaceUri) {
-      const typeData = await this.gitService.getTypeDataForWorkspace(configSet.workspaceUri)
+      const typeData = await this.gitService.getTypeDataForWorkspace(
+        configSet.workspaceUri
+      )
       if (typeData.length > 0) {
-      const textEditForNewText = getNewTextEdit(root, 'type')
-        return typeData.map(({type, count, lastUsed}, index) => ({
+        const textEditForNewText = getNewTextEdit(root, 'type')
+        return typeData.map(({ type, count, lastUsed }, index) => ({
           label: type,
           kind: CompletionItemKind.Enum,
           detail: `From git log introspection: ${count} times used, last time ${lastUsed}`,
           textEdit: textEditForNewText(type),
-          sortText: `${`${999 - count}`.padStart(3, '0')}-${`${index}`.padStart(3, '0')}`,
+          sortText: `${`${999 - count}`.padStart(3, '0')}-${`${index}`.padStart(
+            3,
+            '0'
+          )}`,
         }))
       }
     }
 
-    // TODO: propose defaults
+    // TODO: propose defaults (combined with history)
     return []
   }
 
@@ -146,21 +179,26 @@ export class CompletionProvider {
         // TODO: detail
         // TODO: labelDetails
         // TODO: sortText to ensure order from config
-        textEdit: textEditForNewText(scope)
+        textEdit: textEditForNewText(scope),
       }))
     }
 
     // get scopes from history
     if (configSet.workspaceUri) {
-      const scopeData = await this.gitService.getScopeDataForWorkspace(configSet.workspaceUri)
+      const scopeData = await this.gitService.getScopeDataForWorkspace(
+        configSet.workspaceUri
+      )
       if (scopeData.length > 0) {
-      const textEditForNewText = getNewTextEdit(root, 'scope')
-        return scopeData.map(({scope, count, lastUsed}, index) => ({
+        const textEditForNewText = getNewTextEdit(root, 'scope')
+        return scopeData.map(({ scope, count, lastUsed }, index) => ({
           label: scope,
           kind: CompletionItemKind.Enum,
           detail: `From git log introspection: ${count} times used, last time ${lastUsed}`,
           textEdit: textEditForNewText(scope),
-          sortText: `${`${999 - count}`.padStart(3, '0')}-${`${index}`.padStart(3, '0')}`,
+          sortText: `${`${999 - count}`.padStart(3, '0')}-${`${index}`.padStart(
+            3,
+            '0'
+          )}`,
         }))
       }
     }
@@ -181,7 +219,8 @@ export class CompletionProvider {
     // TODO: check if breaking exclamation mark is not wanted
 
     // check if breaking exclamation mark is already there
-    const existingBreakingExclamationMark = parseOutcome.header?.breakingExclamationMark
+    const existingBreakingExclamationMark =
+      parseOutcome.header?.breakingExclamationMark
     if (existingBreakingExclamationMark) {
       return []
     }
