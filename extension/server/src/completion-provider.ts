@@ -8,6 +8,54 @@ import { CommitMessageProvider, ConfigSet } from './commit-message-provider'
 import * as parser from 'git-commit-parser'
 import { GitService } from './git-service'
 
+const defaultTypeCompletions = [
+  {
+    label: 'feat',
+    detail: 'A feature',
+  },
+  {
+    label: 'fix',
+    detail: 'A bug fix',
+  },
+  {
+    label: 'build',
+    detail: 'A build',
+  },
+  {
+    label: 'chore',
+    detail: 'A chore',
+  },
+  {
+    label: 'ci',
+    detail: 'A CI',
+  },
+  {
+    label: 'docs',
+    detail: 'Documentation',
+  },
+  {
+    label: 'style',
+    detail: 'A style',
+  },
+  {
+    label: 'refactor',
+    detail: 'A refactor',
+  },
+  {
+    label: 'perf',
+    detail: 'A performance',
+  },
+  {
+    label: 'test',
+    detail: 'A test',
+  },
+]
+
+const sortTextFromIndex = (index: number) => `${`${index}`.padStart(3, '0')}`
+
+const sortTextFromCountAndIndex = (count: number, index: number) =>
+  `${`${999 - count}`.padStart(3, '0')}-${`${index}`.padStart(3, '0')}`
+
 const getNewTextEdit = (rootNode: parser.Node, nodeType: parser.NodeType) => {
   const node = parser.getRangeForCommitPosition(rootNode, nodeType)
   const textEdit: Omit<TextEdit, 'newText'> | undefined = node
@@ -96,17 +144,46 @@ export class CompletionProvider {
     root: parser.Node,
     parseOutcome: parser.ParseOutcome
   ): Promise<CompletionItem[]> {
+    const hasScope = !!parseOutcome.header?.scope
+    const hasBreakingExclamationMark =
+      !!parseOutcome.header?.breakingExclamationMark
+
     const typeEnumRule = configSet?.config?.rules?.['type-enum']
     const ruleDisabled = (typeEnumRule?.[0] ?? 0) === 0
     const ruleAlways = typeEnumRule?.[1] === 'always'
     const typeEnumValues = typeEnumRule?.[2] ?? []
+    const textEditForNewText = getNewTextEdit(root, 'type')
+
+    const enrichWithBreakingExclamationMark = (
+      completions: CompletionItem[]
+    ) => {
+      if (hasScope || hasBreakingExclamationMark) {
+        return completions
+      }
+      return completions.flatMap((completion) => {
+        if (completion.label !== parseOutcome.header?.type) {
+          return [completion]
+        }
+
+        // this label is already fully written-out, offer the same completion with breaking exclamation mark
+        return [
+          completion,
+          {
+            ...completion,
+            // TODO: documentation
+            // TODO: detail
+            // TODO: labelDetails
+            label: `${completion.label}!`,
+            kind: CompletionItemKind.Operator,
+            textEdit: textEditForNewText(`${completion.label}!`),
+          },
+        ]
+      })
+    }
+
     if (!ruleDisabled && ruleAlways && typeEnumValues.length > 0) {
-      const textEditForNewText = getNewTextEdit(root, 'type')
-      const hasScope = !!parseOutcome.header?.scope
-      const hasBreakingExclamationMark =
-        !!parseOutcome.header?.breakingExclamationMark
-      return typeEnumValues
-        .map((type) => ({
+      return enrichWithBreakingExclamationMark(
+        typeEnumValues.map((type) => ({
           label: type,
           kind: CompletionItemKind.Enum,
           // TODO: documentation
@@ -115,52 +192,49 @@ export class CompletionProvider {
           // TODO: sortText to ensure order from config
           textEdit: textEditForNewText(type),
         }))
-        .flatMap((completion) => {
-          if (
-            !hasScope &&
-            !hasBreakingExclamationMark &&
-            completion.label === parseOutcome.header?.type
-          ) {
-            // if this label is already fully written-out, offer the same with breaking exclamation mark
-            return [
-              completion,
-              {
-                ...completion,
-                // TODO: documentation
-                // TODO: detail
-                // TODO: labelDetails
-                label: `${completion.label}!`,
-                kind: CompletionItemKind.Operator,
-                textEdit: textEditForNewText(`${completion.label}!`),
-              },
-            ]
-          }
-          return [completion]
-        })
+      )
     }
 
-    // get types from history
+    const skipInDefaults: Set<string> = new Set()
+    if (!ruleDisabled && !ruleAlways && typeEnumValues.length > 0) {
+      // we do not want to propose default types if they are in the "never" list of the config
+      typeEnumValues.forEach(value => skipInDefaults.add(value))
+    }
+
+
+    // get types from history and defaults
+    const completions: CompletionItem[] = []
+
     if (configSet.workspaceUri) {
       const typeData = await this.gitService.getTypeDataForWorkspace(
         configSet.workspaceUri
       )
       if (typeData.length > 0) {
-        const textEditForNewText = getNewTextEdit(root, 'type')
-        return typeData.map(({ type, count, lastUsed }, index) => ({
-          label: type,
-          kind: CompletionItemKind.Enum,
-          detail: `From git log introspection: ${count} times used, last time ${lastUsed}`,
-          textEdit: textEditForNewText(type),
-          sortText: `${`${999 - count}`.padStart(3, '0')}-${`${index}`.padStart(
-            3,
-            '0'
-          )}`,
-        }))
+        completions.push(
+          ...typeData.map(({ type, count, lastUsed }, index) => ({
+            label: type,
+            kind: CompletionItemKind.Interface,
+            detail: `git log: ${count}x used, last ${lastUsed}`,
+            textEdit: textEditForNewText(type),
+            sortText: sortTextFromCountAndIndex(count, index),
+          }))
+        )
+        // we do not want to propose default types again if they are already proposed from the history
+        completions.forEach(completion => skipInDefaults.add(completion.label))
       }
     }
+    // add defaults
+    completions.push(
+      ...defaultTypeCompletions.filter(completion => !skipInDefaults.has(completion.label)).map((completion, index) => ({
+        label: completion.label,
+        kind: CompletionItemKind.Constant,
+        detail: completion.detail,
+        textEdit: textEditForNewText(completion.label),
+        sortText: sortTextFromCountAndIndex(0, index),
+      }))
+    )
 
-    // TODO: propose defaults (combined with history)
-    return []
+    return enrichWithBreakingExclamationMark(completions)
   }
 
   async getCompletionScopes(
@@ -170,8 +244,9 @@ export class CompletionProvider {
     // TODO: check if rule is always applied
     const scopeEnumRule = configSet?.config?.rules?.['scope-enum']
     const scopeEnumValues = scopeEnumRule?.[2] ?? []
+    const textEditForNewText = getNewTextEdit(root, 'scope')
+
     if (scopeEnumValues.length > 0) {
-      const textEditForNewText = getNewTextEdit(root, 'scope')
       return scopeEnumValues.map((scope) => ({
         label: scope,
         kind: CompletionItemKind.Enum,
@@ -189,16 +264,12 @@ export class CompletionProvider {
         configSet.workspaceUri
       )
       if (scopeData.length > 0) {
-        const textEditForNewText = getNewTextEdit(root, 'scope')
         return scopeData.map(({ scope, count, lastUsed }, index) => ({
           label: scope,
           kind: CompletionItemKind.Enum,
           detail: `From git log introspection: ${count} times used, last time ${lastUsed}`,
           textEdit: textEditForNewText(scope),
-          sortText: `${`${999 - count}`.padStart(3, '0')}-${`${index}`.padStart(
-            3,
-            '0'
-          )}`,
+          sortText: sortTextFromCountAndIndex(count, index),
         }))
       }
     }
