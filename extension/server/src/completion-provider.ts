@@ -8,6 +8,12 @@ import { CommitMessageProvider, ConfigSet } from './commit-message-provider'
 import * as parser from 'git-commit-parser'
 import { GitService } from './git-service'
 
+export interface WorkspaceScope {
+  label: string
+  origin: string
+  type: string
+}
+
 const defaultTypeCompletions = [
   {
     label: 'feat',
@@ -81,7 +87,8 @@ const getNewTextEdit = (rootNode: parser.Node, nodeType: parser.NodeType) => {
 export class CompletionProvider {
   constructor(
     private readonly commitMessageProvider: CommitMessageProvider,
-    private readonly gitService: GitService
+    private readonly gitService: GitService,
+    private readonly workspaceScopeRequester: () => Promise<WorkspaceScope[]>
   ) {}
 
   // This handler provides the initial list of the completion items.
@@ -198,9 +205,8 @@ export class CompletionProvider {
     const skipInDefaults: Set<string> = new Set()
     if (!ruleDisabled && !ruleAlways && typeEnumValues.length > 0) {
       // we do not want to propose default types if they are in the "never" list of the config
-      typeEnumValues.forEach(value => skipInDefaults.add(value))
+      typeEnumValues.forEach((value) => skipInDefaults.add(value))
     }
-
 
     // get types from history and defaults
     const completions: CompletionItem[] = []
@@ -220,18 +226,22 @@ export class CompletionProvider {
           }))
         )
         // we do not want to propose default types again if they are already proposed from the history
-        completions.forEach(completion => skipInDefaults.add(completion.label))
+        completions.forEach((completion) =>
+          skipInDefaults.add(completion.label)
+        )
       }
     }
     // add defaults
     completions.push(
-      ...defaultTypeCompletions.filter(completion => !skipInDefaults.has(completion.label)).map((completion, index) => ({
-        label: completion.label,
-        kind: CompletionItemKind.Constant,
-        detail: completion.detail,
-        textEdit: textEditForNewText(completion.label),
-        sortText: sortTextFromCountAndIndex(0, index),
-      }))
+      ...defaultTypeCompletions
+        .filter((completion) => !skipInDefaults.has(completion.label))
+        .map((completion, index) => ({
+          label: completion.label,
+          kind: CompletionItemKind.Constant,
+          detail: completion.detail,
+          textEdit: textEditForNewText(completion.label),
+          sortText: sortTextFromCountAndIndex(0, index),
+        }))
     )
 
     return enrichWithBreakingExclamationMark(completions)
@@ -243,10 +253,12 @@ export class CompletionProvider {
   ): Promise<CompletionItem[]> {
     // TODO: check if rule is always applied
     const scopeEnumRule = configSet?.config?.rules?.['scope-enum']
+    const ruleDisabled = (scopeEnumRule?.[0] ?? 0) === 0
+    const ruleAlways = scopeEnumRule?.[1] === 'always'
     const scopeEnumValues = scopeEnumRule?.[2] ?? []
     const textEditForNewText = getNewTextEdit(root, 'scope')
 
-    if (scopeEnumValues.length > 0) {
+    if (!ruleDisabled && ruleAlways && scopeEnumValues.length > 0) {
       return scopeEnumValues.map((scope) => ({
         label: scope,
         kind: CompletionItemKind.Enum,
@@ -258,29 +270,44 @@ export class CompletionProvider {
       }))
     }
 
-    // get scopes from history
+    // get types from history and workspace completions
+    const completions: CompletionItem[] = []
+
     if (configSet.workspaceUri) {
-      const scopeData = await this.gitService.getScopeDataForWorkspace(
-        configSet.workspaceUri
-      )
-      if (scopeData.length > 0) {
-        return scopeData.map(({ scope, count, lastUsed }, index) => ({
-          label: scope,
-          kind: CompletionItemKind.Enum,
-          detail: `From git log introspection: ${count} times used, last time ${lastUsed}`,
-          textEdit: textEditForNewText(scope),
-          sortText: sortTextFromCountAndIndex(count, index),
+      // order: TODO
+      // * first workspace which have been in history
+      // * then history
+      // * lastly workspace which have NOT been in history
+
+      const [workspaceCompletions, scopeData] = await Promise.all([
+        this.workspaceScopeRequester(),
+        this.gitService.getScopeDataForWorkspace(configSet.workspaceUri),
+      ])
+
+      completions.push(
+        ...workspaceCompletions.map((workspaceCompletion, index) => ({
+          label: workspaceCompletion.label,
+          kind: CompletionItemKind.Folder,
+          // TODO: detail
+          textEdit: textEditForNewText(workspaceCompletion.label),
+          sortText: sortTextFromCountAndIndex(999, index),
         }))
+      )
+
+      if (scopeData.length > 0) {
+        completions.push(
+          ...scopeData.map(({ scope, count, lastUsed }, index) => ({
+            label: scope,
+            kind: CompletionItemKind.Enum,
+            detail: `git log: ${count}x used, last ${lastUsed}`,
+            textEdit: textEditForNewText(scope),
+            sortText: sortTextFromCountAndIndex(count, index),
+          }))
+        )
       }
     }
 
-    // TODO: propose scopes from workspace
-    // * package.json workspace
-    // * yarn workspace
-    // * lerna workspace
-    // * src subsfolders
-    // * ...
-    return []
+    return completions
   }
 
   getCompletionBreakingExclamationMark(

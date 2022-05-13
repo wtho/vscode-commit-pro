@@ -8,6 +8,7 @@ import {
 } from 'vscode-languageclient/node'
 import { OpenEditorCommand } from './command-open-editor'
 import { GitClientService } from './git-client-service'
+import { WorkspaceClientService } from './workspace-client-service'
 
 let client: LanguageClient
 
@@ -113,14 +114,29 @@ export async function activate(context: ExtensionContext) {
 
   await client.onReady()
 
+  const workspaceClientService = new WorkspaceClientService(workspace)
+
+  context.subscriptions.push(workspaceClientService)
+
   context.subscriptions.push(
     client.onNotification('gitCommit/requestRepoCommits', async (event) => {
       try {
         const commitData = await gitClientService.getCommitData(event.uri, event.commitIds)
         client.sendNotification('gitCommit/repoCommits', commitData)
       } catch { /* it's ok, server is outdated and is already getting notified */}
+    }),
+
+    client.onNotification('gitCommit/requestScopeWorkspaceSuggestions', async (event) => {
+      try {
+        const suggestions = await workspaceClientService.getScopeSuggestions()
+        client.sendNotification('gitCommit/scopeWorkspaceSuggestions', suggestions)
+      } catch {
+        // TODO
+      }
     })
   )
+
+  console.log('scopes:', await workspaceClientService.getScopeSuggestions())
 
   gitClientService.fireInitialRepoUpdates()
 }

@@ -24,13 +24,14 @@ import {
   CommitMessageProvider,
   PartialTextDocument,
 } from './commit-message-provider'
-import { CompletionProvider } from './completion-provider'
+import { CompletionProvider, WorkspaceScope } from './completion-provider'
 import {
   BaseCommit,
   GitClientRepositoryCloseEvent,
   GitClientRepostoryUpdateEvent,
   GitService,
 } from './git-service'
+import { EventEmitter } from 'stream'
 
 // Create a connection for the server, using Node's IPC as a transport.
 // Also include all preview / proposed LSP features.
@@ -49,7 +50,15 @@ const gitService = new GitService()
 const semanticTokensProvider = new SemanticTokensProvider(commitMessageProvider)
 const completionProvider = new CompletionProvider(
   commitMessageProvider,
-  gitService
+  gitService,
+  () =>
+    new Promise<WorkspaceScope[]>((resolve, reject) => {
+      connection.sendNotification('gitCommit/requestScopeWorkspaceSuggestions')
+      workspaceScopeEventTarget.once(
+        'gitCommit/scopeWorkspaceSuggestions',
+        (scopes: WorkspaceScope[]) => resolve(scopes)
+      )
+    })
 )
 
 let hasConfigurationCapability = false
@@ -407,6 +416,15 @@ connection.onNotification(
   'gitCommit/repoClose',
   (event: GitClientRepositoryCloseEvent) => {
     gitService.closeRepo(event.uri)
+  }
+)
+
+const workspaceScopeEventTarget = new EventEmitter()
+
+connection.onNotification(
+  'gitCommit/scopeWorkspaceSuggestions',
+  (event: { scopes: WorkspaceScope[] }) => {
+    workspaceScopeEventTarget.emit('gitCommit/scopeWorkspaceSuggestions', event)
   }
 )
 
