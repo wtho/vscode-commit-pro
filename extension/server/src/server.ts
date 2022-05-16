@@ -10,15 +10,12 @@ import {
   InitializeResult,
   SemanticTokensRegistrationOptions,
   SemanticTokensRegistrationType,
-  Proposed,
-  LSPObject,
   FileChangeType,
-  URI,
+  CodeActionKind,
 } from 'vscode-languageserver/node'
 
 import { TextDocument } from 'vscode-languageserver-textdocument'
 
-import * as commitlint from './commitlint'
 import { SemanticTokensProvider } from './semantic-tokens-provider'
 import {
   CommitMessageProvider,
@@ -32,6 +29,8 @@ import {
   GitService,
 } from './git-service'
 import { EventEmitter } from 'stream'
+import { CodeActionProvider } from './code-action-provider'
+import { DiagnosticsProvider } from './diagnostics-provider'
 
 // Create a connection for the server, using Node's IPC as a transport.
 // Also include all preview / proposed LSP features.
@@ -60,6 +59,13 @@ const completionProvider = new CompletionProvider(
       )
     })
 )
+
+const codeActionProvider = new CodeActionProvider(
+  commitMessageProvider,
+  gitService
+)
+
+const diagnosticsProvider = new DiagnosticsProvider(commitMessageProvider)
 
 let hasConfigurationCapability = false
 let hasWorkspaceFolderCapability = false
@@ -104,10 +110,10 @@ connection.onInitialize((params: InitializeParams) => {
       // documentHighlightProvider: true,
       // documentSymbolProvider: true,
       // workspaceSymbolProvider: true,
-      // codeActionProvider: {
-      // 	codeActionKinds: [CodeActionKind.Refactor, CodeActionKind.Source, CodeActionKind.SourceOrganizeImports],
-      // 	resolveProvider: true
-      // },
+      codeActionProvider: {
+        codeActionKinds: [CodeActionKind.QuickFix],
+        resolveProvider: true,
+      },
       // codeLensProvider: {
       // 	resolveProvider: true
       // },
@@ -140,12 +146,6 @@ connection.onInitialize((params: InitializeParams) => {
         interFileDependencies: false,
         workspaceDiagnostics: false,
       },
-      // notebookDocumentSync: {
-      // 	notebookSelector: [{
-      // 		cells: [{ language: 'bat'}]
-      // 	}],
-      // 	mode: 'notebook'
-      // }
     },
   }
   return result
@@ -204,7 +204,10 @@ connection.onDidChangeConfiguration((change) => {
   }
 
   // Revalidate all open text documents
-  documents.all().forEach(validateTextDocument)
+  documents.all().forEach(async (document) => {
+    const diagnostics = await diagnosticsProvider.getDiagnostics(document)
+    connection.sendDiagnostics({ uri: document.uri, diagnostics })
+  })
 })
 
 connection.onDefinition((params) => {
@@ -212,104 +215,38 @@ connection.onDefinition((params) => {
   return []
 })
 
-function getDocumentSettings(resource: string): Thenable<ExampleSettings> {
-  if (!hasConfigurationCapability) {
-    return Promise.resolve(globalSettings)
-  }
-  let result = documentSettings.get(resource)
-  if (!result) {
-    result = connection.workspace.getConfiguration({
-      scopeUri: resource,
-      section: 'languageServerExample',
-    })
-    documentSettings.set(resource, result)
-  }
-  return result
-}
+// function getDocumentSettings(resource: string): Thenable<ExampleSettings> {
+//   if (!hasConfigurationCapability) {
+//     return Promise.resolve(globalSettings)
+//   }
+//   let result = documentSettings.get(resource)
+//   if (!result) {
+//     result = connection.workspace.getConfiguration({
+//       scopeUri: resource,
+//       section: 'languageServerExample',
+//     })
+//     documentSettings.set(resource, result)
+//   }
+//   return result
+// }
 
 // Only keep settings for open documents
 documents.onDidClose((e) => {
-  // TODO tell external git process to close program so commit gets added to log
   documentSettings.delete(e.document.uri)
 })
 
 // The content of a text document has changed. This event is emitted
 // when the text document first opened or when its content has changed.
-documents.onDidChangeContent((change) => {
-  validateTextDocument(change.document)
+documents.onDidChangeContent(async (change) => {
+  const diagnostics = await diagnosticsProvider.getDiagnostics(change.document)
+  connection.sendDiagnostics({
+    uri: change.document.uri,
+    diagnostics,
+  })
 })
 
-async function validateTextDocument(
-  textDocument: PartialTextDocument
-): Promise<void> {
-  // In this simple example we get the settings for every validate run.
-  // const settings = await getDocumentSettings(textDocument.uri)
-
-  const parsedTree = await commitMessageProvider.getParsedTreeForDocument(
-    textDocument
-  )
-
-  if (!parsedTree) {
-    console.warn(`OnValidate: Could not parse tree from input`)
-    return
-  }
-
-  const config = await commitMessageProvider.getConfig(
-    parsedTree.config?.configUri,
-    textDocument.uri
-  )
-
-  const { rules, ...options } = config?.config ?? {}
-
-  const { diagnostics, configErrors, semVerUpdate } = await commitlint.validate(
-    {
-      parsedRootNode: parsedTree.parseOutcome?.root,
-      commitMessage: parsedTree.text,
-      options,
-      rules,
-    }
-  )
-
-  const enrichedDiagnostics = diagnostics.map((diagnostic) => {
-    const source = ['commitlint', config?.configPath].filter(Boolean).join(':')
-    diagnostic.source = source
-    return diagnostic
-  })
-
-  // const diagnostic: Diagnostic = {
-  //   severity: DiagnosticSeverity.Warning,
-  //   range: {
-  //     start: textDocument.positionAt(m.index),
-  //     end: textDocument.positionAt(m.index + m[0].length),
-  //   },
-  //   message: `${m[0]} is all uppercase.`,
-  //   source: 'ex',
-  // }
-  // if (hasDiagnosticRelatedInformationCapability) {
-  //   diagnostic.relatedInformation = [
-  //     {
-  //       location: {
-  //         uri: textDocument.uri,
-  //         range: Object.assign({}, diagnostic.range),
-  //       },
-  //       message: 'Spelling matters',
-  //     },
-  //     {
-  //       location: {
-  //         uri: textDocument.uri,
-  //         range: Object.assign({}, diagnostic.range),
-  //       },
-  //       message: 'Particularly for names',
-  //     },
-  //   ]
-  // }
-
-  // Send the computed diagnostics to VSCode.
-  connection.sendDiagnostics({
-    uri: textDocument.uri,
-    diagnostics: enrichedDiagnostics,
-  })
-}
+// In this simple example we get the settings for every validate run.
+// const settings = await getDocumentSettings(textDocument.uri)
 
 connection.onDidChangeWatchedFiles(async (change) => {
   // taken from
@@ -357,7 +294,12 @@ connection.onDidChangeWatchedFiles(async (change) => {
   const documents = commitMessageProvider.getDocuments()
 
   // re-evaluate diagnostics
-  await Promise.all(documents.map((document) => validateTextDocument(document)))
+  await Promise.all(
+    documents.map(async (document) => {
+      const diagnostics = await diagnosticsProvider.getDiagnostics(document)
+      connection.sendDiagnostics({ uri: document.uri, diagnostics })
+    })
+  )
 })
 
 // connection.onDidOpenTextDocument((handler) => {
@@ -389,6 +331,10 @@ connection.onCompletion(
 
 connection.onCompletionResolve((item) =>
   completionProvider.resolveCompletion(item)
+)
+
+connection.onCodeAction((params) =>
+  codeActionProvider.provideCodeActions(params)
 )
 
 connection.onNotification(

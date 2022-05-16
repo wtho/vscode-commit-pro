@@ -4,6 +4,7 @@ import {
   LintOutcome,
   LintRuleOutcome,
   ParserOptions,
+  RuleConfigCondition,
   RuleConfigQuality,
   RuleConfigSeverity,
   RulesConfig,
@@ -13,16 +14,25 @@ import parse from '@commitlint/parse'
 import { Diagnostic, DiagnosticSeverity } from 'vscode-languageserver/node'
 import * as parser from 'git-commit-parser'
 
-type CommitPositionId = 'header' | 'type' | 'scope' | 'description' | 'body' | 'footer'
+type CommitPositionId =
+  | 'header'
+  | 'type'
+  | 'scope'
+  | 'description'
+  | 'body'
+  | 'footer'
 
 type CommitPositions = Partial<Record<CommitPositionId, parser.Range>>
-const cachedPositionsForParsedCommitTree = new WeakMap<parser.Node, CommitPositions>()
+const cachedPositionsForParsedCommitTree = new WeakMap<
+  parser.Node,
+  CommitPositions
+>()
 
 type GetRange = (commitPart: CommitPositionId) => parser.Range
 
 interface ConverterContext {
-  getRange: GetRange,
-  rules?: Partial<RulesConfig<RuleConfigQuality.Qualified>>,
+  getRange: GetRange
+  rules?: Partial<RulesConfig<RuleConfigQuality.Qualified>>
 }
 
 export interface MessageSemVerUpdateState {
@@ -44,7 +54,7 @@ export const validate = async ({
 }: {
   parsedRootNode: parser.Node | undefined
   commitMessage: string | undefined
-  rules?: Partial<RulesConfig<RuleConfigQuality.Qualified>>,
+  rules?: Partial<RulesConfig<RuleConfigQuality.Qualified>>
   options?: LintOptions
 }): Promise<{
   diagnostics: Diagnostic[]
@@ -52,7 +62,11 @@ export const validate = async ({
   configErrors: string[]
 }> => {
   if (!commitMessage || !commitMessage.trim()) {
-    return { diagnostics: [], semVerUpdate: messageSemVerUpdateStateNoUpdate, configErrors: [] }
+    return {
+      diagnostics: [],
+      semVerUpdate: messageSemVerUpdateStateNoUpdate,
+      configErrors: [],
+    }
   }
   let linted: LintOutcome
   let parsed: Commit
@@ -64,8 +78,12 @@ export const validate = async ({
     linted = lintOutcome
     parsed = parsedCommit
   } catch (err: unknown) {
-    const error = err as Error;
-    return { diagnostics: [], semVerUpdate: messageSemVerUpdateStateNoUpdate, configErrors: [error?.message] }
+    const error = err as Error
+    return {
+      diagnostics: [],
+      semVerUpdate: messageSemVerUpdateStateNoUpdate,
+      configErrors: [error?.message],
+    }
   }
 
   // TODO go through tree instead of using regexp
@@ -89,18 +107,30 @@ export const validate = async ({
     return { diagnostics: [], semVerUpdate: semVerUpdate, configErrors: [] }
   }
 
-  const getRange: GetRange = parsedTree ? (part: CommitPositionId) => getRangeForCommitPart(part, parsedTree) : () => ({
-    start: { line: 0, character: 0 },
-    end: { line: Number.MAX_SAFE_INTEGER, character: Number.MAX_SAFE_INTEGER },
-  })
+  const getRange: GetRange = parsedTree
+    ? (part: CommitPositionId) => getRangeForCommitPart(part, parsedTree)
+    : () => ({
+        start: { line: 0, character: 0 },
+        end: {
+          line: Number.MAX_SAFE_INTEGER,
+          character: Number.MAX_SAFE_INTEGER,
+        },
+      })
 
   const diagnostics = [...linted.errors, ...linted.warnings]
-    .map((lintedRuleOutcome) => getDiagnosticForMarker(lintedRuleOutcome, { getRange, rules }))
-    .filter((diagnostic: Diagnostic | null): diagnostic is Diagnostic => !!diagnostic)
+    .map((lintedRuleOutcome) =>
+      getDiagnosticForMarker(lintedRuleOutcome, { getRange, rules })
+    )
+    .filter(
+      (diagnostic: Diagnostic | null): diagnostic is Diagnostic => !!diagnostic
+    )
   return { diagnostics, semVerUpdate: semVerUpdate, configErrors: [] }
 }
 
-function getRangeForCommitPart(part: CommitPositionId, commit: parser.Node): parser.Range {
+function getRangeForCommitPart(
+  part: CommitPositionId,
+  commit: parser.Node
+): parser.Range {
   if (cachedPositionsForParsedCommitTree.has(commit)) {
     const cachedPositions = cachedPositionsForParsedCommitTree.get(commit)!
     if (part in cachedPositions) {
@@ -120,7 +150,9 @@ function getRangeForCommitPart(part: CommitPositionId, commit: parser.Node): par
   return range
 }
 
-function toDiagnosticsSeverity(commitlintSeverity: RuleConfigSeverity): DiagnosticSeverity {
+function toDiagnosticsSeverity(
+  commitlintSeverity: RuleConfigSeverity
+): DiagnosticSeverity {
   if (commitlintSeverity === RuleConfigSeverity.Disabled) {
     throw new Error('Disabled rules should not lead to a lint rule outcome')
   }
@@ -130,64 +162,88 @@ function toDiagnosticsSeverity(commitlintSeverity: RuleConfigSeverity): Diagnost
   if (commitlintSeverity === RuleConfigSeverity.Error) {
     return DiagnosticSeverity.Error
   }
-  throw new Error(`Unspecified commitlint rule outcome severity: ${commitlintSeverity}`)
+  throw new Error(
+    `Unspecified commitlint rule outcome severity: ${commitlintSeverity}`
+  )
 }
 
-function getDiagnosticForMarker(lintRuleOutcome: LintRuleOutcome, converterContext: ConverterContext): Diagnostic | null {
+function getDiagnosticForMarker(
+  lintRuleOutcome: LintRuleOutcome,
+  converterContext: ConverterContext
+): Diagnostic | null {
   const severity = toDiagnosticsSeverity(lintRuleOutcome.level)
-  const message = `${lintRuleOutcome.message} (${lintRuleOutcome.name})`
+  const code = lintRuleOutcome.name
+  const message = `${lintRuleOutcome.message} (${code})`
   const lintRuleOutcomePrefixes = Object.keys(lintRuleOutcomeConversions)
-  const lintRuleOutcomePrefix = lintRuleOutcomePrefixes.find((prefix) => lintRuleOutcome.name.startsWith(prefix))
+  const lintRuleOutcomePrefix = lintRuleOutcomePrefixes.find((prefix) =>
+    lintRuleOutcome.name.startsWith(prefix)
+  )
   if (!lintRuleOutcomePrefix) {
     // TODO log error?
     return null
   }
   const converter = lintRuleOutcomeConversions[lintRuleOutcomePrefix]
-  return converter({ severity, message }, converterContext)
+  const converted = converter({ severity, message, code }, converterContext)
+  converted.data = {
+    ...converted.data,
+    rule: {
+      ruleName: code,
+      severity,
+      condition: converterContext.rules?.[code]?.[1],
+      ruleArgs: converterContext.rules?.[code]?.[2]
+    },
+  }
+  return converted
 }
 
 const lintRuleOutcomeConversions: {
   [ruleStartsWith: string]: (
-    data: { severity: DiagnosticSeverity, message: string },
-    context: ConverterContext,
+    data: { severity: DiagnosticSeverity; message: string; code: string },
+    context: ConverterContext
   ) => Diagnostic
 } = {
-  'header-max-length': ({ severity, message }, { rules, getRange }) => ({
+  'header-max-length': ({ severity, message, code }, { rules, getRange }) => ({
+    code,
     range: getRange('header'),
     startColumn:
       rules?.['header-max-length']?.[2] ?? getRange('header').start.character,
     severity,
     message,
   }),
-  'header-': ({ severity, message }, { getRange }) => ({
+  'header-': ({ severity, message, code }, { getRange }) => ({
+    code,
     range: getRange('header'),
     severity,
     message,
   }),
-  'type-': ({ severity, message }, { getRange }) => ({
+  'type-': ({ severity, message, code }, { getRange }) => ({
+    code,
     range: getRange('type'),
     severity,
     message,
   }),
-  'scope-': ({ severity, message}, { getRange }) => ({
+  'scope-': ({ severity, message, code }, { getRange }) => ({
+    code,
     range: getRange('scope'),
     severity,
     message,
   }),
-  'subject-': ({ severity, message }, { getRange }) => ({
+  'subject-': ({ severity, message, code }, { getRange }) => ({
+    code,
     range: getRange('description'),
     severity,
     message,
   }),
-  'body-': ({ severity, message }, { getRange }) => ({
+  'body-': ({ severity, message, code }, { getRange }) => ({
+    code,
     range: getRange('body'),
     severity,
     message,
   }),
-  'footer-': ({ severity, message }, { getRange }) => ({
+  'footer-': ({ severity, message, code }, { getRange }) => ({
+    code,
     range: getRange('footer'),
     severity,
     message,
   }),
 }
-

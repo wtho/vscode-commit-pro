@@ -1,6 +1,7 @@
 import type { ChildProcess, ExecException, ExecOptions } from 'child_process'
 import * as url from 'url'
 import { Disposable } from 'vscode-languageclient'
+import { GitClientService } from './git-client-service'
 
 async function runWithShell(
   command: string,
@@ -71,11 +72,15 @@ async function getGitExecutive(): Promise<{
   )
 }
 
-async function startGitCodeWait(folder: string): Promise<string> {
+async function startGitCodeWait(folder: string, amend: boolean): Promise<string> {
+  const args = ['-c', 'core.editor="code --wait"', 'commit']
+  if (amend) {
+    args.push('--amend')
+  }
   return new Promise((resolve, reject) =>
     runWithShell(
       'git',
-      ['-c', 'core.editor="code --wait"', 'commit'],
+      args,
       { cwd: folder },
       (error, stdout, stderr) => {
         if (error) {
@@ -90,6 +95,8 @@ async function startGitCodeWait(folder: string): Promise<string> {
 
 export class OpenEditorCommand {
   public readonly command = 'commitPro.editor.command.openEditor'
+
+  constructor(private readonly gitClientService: GitClientService) {}
 
   public async run(gitUris: string[]): Promise<void> {
     const [gitExecutive, codeExecutive] = await Promise.all([
@@ -109,8 +116,12 @@ export class OpenEditorCommand {
     }
 
     const folder = url.fileURLToPath(gitUris[0])
+
+    const gitIsClean = await this.gitClientService.isClean()
+    const amend = gitIsClean
+
     try {
-      const resultMessage = await startGitCodeWait(folder)
+      const resultMessage = await startGitCodeWait(folder, amend)
       console.log({ resultMessage })
     } catch (err) {
       console.error({ err })

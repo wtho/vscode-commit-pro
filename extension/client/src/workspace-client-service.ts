@@ -28,11 +28,7 @@ export class WorkspaceClientService implements Disposable {
   > {
     await this.init()
 
-    console.log('find packagejson suggestions')
-
     const uris = await workspace.findFiles('package.json')
-
-    console.log(`found ${uris.length} packagejson suggestions`)
     if (uris.length !== 1) {
       return []
     }
@@ -44,7 +40,6 @@ export class WorkspaceClientService implements Disposable {
 
     const results: { label: string; origin: string; type: string }[] = []
     for (const workspace of workspaces) {
-      console.log(`processing ${workspace} packagejson suggestions`)
       if (workspace.endsWith('/*')) {
         // resolve wildcards - e. g. 'packages/*' to 'package-a', 'package-b'
         const nodeProjects = await this.getNodeProjectsForGlob(
@@ -99,8 +94,6 @@ export class WorkspaceClientService implements Disposable {
     { label: string; origin: string; type: string }[]
   > {
     await this.init()
-
-    console.log('get scope suggestions')
 
     const results = await Promise.all([this.getRootPackageJsonWorkspaces()])
 

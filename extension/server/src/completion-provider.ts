@@ -90,7 +90,6 @@ export class CompletionProvider {
     private readonly gitService: GitService,
     private readonly workspaceScopeRequester: () => Promise<WorkspaceScope[]>
   ) {}
-
   // This handler provides the initial list of the completion items.
   async provideCompletion(
     textDocumentPosition: TextDocumentPositionParams

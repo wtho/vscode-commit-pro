@@ -62,10 +62,10 @@ type StandardToken = typeof standardTokens[number]
 const tokenMap: { [P in parser.NodeType]: StandardToken | null } = {
   type: 'type',
   'scope-paren-open': 'operator',
-  scope: 'class',
+  scope: 'function',
   'scope-paren-close': 'operator',
-  'breaking-exclamation-mark': 'interface',
-  'breaking-change-literal': 'interface',
+  'breaking-exclamation-mark': 'macro',
+  'breaking-change-literal': 'macro',
   description: 'string',
   message: null,
   header: null,

@@ -18,18 +18,18 @@
 		"node": "*"
 	},
 	"dependencies": {
-		"@commitlint/config-conventional": "^16.2.4",
-		"@commitlint/lint": "^16.2.4",
-		"@commitlint/load": "^16.2.4",
-		"@commitlint/parse": "^16.2.1",
-		"@commitlint/rules": "^16.2.4",
+		"@commitlint/config-conventional": "^17.0.0",
+		"@commitlint/lint": "^17.0.0",
+		"@commitlint/load": "^17.0.0",
+		"@commitlint/parse": "^17.0.0",
+		"@commitlint/rules": "^17.0.0",
 		"conventional-changelog-conventionalcommits": "^4.6.3",
 		"git-commit-parser": "^0.1.0",
-		"vscode-languageserver": "^8.0.0-next.14",
+		"vscode-languageserver": "^8.0.1",
 		"vscode-languageserver-textdocument": "^1.0.4"
 	},
 	"scripts": {},
 	"devDependencies": {
-		"@commitlint/types": "^16.2.1"
+		"@commitlint/types": "^17.0.0"
 	}
 }

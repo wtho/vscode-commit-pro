@@ -80,7 +80,7 @@ export async function activate(context: ExtensionContext) {
 
   const gitClientService = new GitClientService()
 
-  const openEditorCommand = new OpenEditorCommand()
+  const openEditorCommand = new OpenEditorCommand(gitClientService)
 
   context.subscriptions.push(
     gitClientService,
@@ -110,9 +110,7 @@ export async function activate(context: ExtensionContext) {
   })
 
   // Start the client. This will also launch the server
-  context.subscriptions.push(client.start())
-
-  await client.onReady()
+  await client.start()
 
   const workspaceClientService = new WorkspaceClientService(workspace)
 
@@ -135,8 +133,6 @@ export async function activate(context: ExtensionContext) {
       }
     })
   )
-
-  console.log('scopes:', await workspaceClientService.getScopeSuggestions())
 
   gitClientService.fireInitialRepoUpdates()
 }

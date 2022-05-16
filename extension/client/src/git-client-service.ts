@@ -120,7 +120,13 @@ export class GitClientService extends EventEmitter<GitClientEvent> {
   async fireInitialRepoUpdates(): Promise<void> {
     for (const repo of this.repoForUri.values()) {
       const { uri, branch, commitIds, headCommit } = repo
-      this.fire({ uri, branch, headCommit, commitIds, type: 'repository-update' })
+      this.fire({
+        uri,
+        branch,
+        headCommit,
+        commitIds,
+        type: 'repository-update',
+      })
     }
   }
 
@@ -224,6 +230,16 @@ export class GitClientService extends EventEmitter<GitClientEvent> {
       uri,
       commits,
     }
+  }
+
+  async isClean(): Promise<boolean> {
+    await this.initialization
+
+    const gitApi = await this.gitApi
+    return gitApi.repositories.some(
+      (repo) =>
+        repo.state.indexChanges.length === 0 && repo.state.mergeChanges.length === 0
+    )
   }
 
   dispose(): void {

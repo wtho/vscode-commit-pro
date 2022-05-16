@@ -15,10 +15,10 @@
 		"url": "git+https://github.com/wtho/vscode-conventional-commits.git"
 	},
 	"engines": {
-		"vscode": "^1.63.0"
+		"vscode": "^1.67.1"
 	},
 	"dependencies": {
-		"vscode-languageclient": "^7.0.0"
+		"vscode-languageclient": "^8.0.1"
 	},
 	"devDependencies": {
 		"@types/vscode": "^1.63.0",
