@@ -13,14 +13,11 @@ import {
   FileChangeType,
   CodeActionKind,
 } from 'vscode-languageserver/node'
-
 import { TextDocument } from 'vscode-languageserver-textdocument'
+import { EventEmitter } from 'stream'
 
 import { SemanticTokensProvider } from './semantic-tokens-provider'
-import {
-  CommitMessageProvider,
-  PartialTextDocument,
-} from './commit-message-provider'
+import { CommitMessageProvider, } from './commit-message-provider'
 import { CompletionProvider, WorkspaceScope } from './completion-provider'
 import {
   BaseCommit,
@@ -28,7 +25,6 @@ import {
   GitClientRepostoryUpdateEvent,
   GitService,
 } from './git-service'
-import { EventEmitter } from 'stream'
 import { CodeActionProvider } from './code-action-provider'
 import { DiagnosticsProvider } from './diagnostics-provider'
 
@@ -65,7 +61,11 @@ const codeActionProvider = new CodeActionProvider(
   gitService
 )
 
-const diagnosticsProvider = new DiagnosticsProvider(commitMessageProvider)
+const diagnosticsProvider = new DiagnosticsProvider(
+  commitMessageProvider,
+  connection.languages.diagnostics,
+  documents
+)
 
 let hasConfigurationCapability = false
 let hasWorkspaceFolderCapability = false
@@ -204,10 +204,7 @@ connection.onDidChangeConfiguration((change) => {
   }
 
   // Revalidate all open text documents
-  documents.all().forEach(async (document) => {
-    const diagnostics = await diagnosticsProvider.getDiagnostics(document)
-    connection.sendDiagnostics({ uri: document.uri, diagnostics })
-  })
+  diagnosticsProvider.refreshDiagnostics()
 })
 
 connection.onDefinition((params) => {
@@ -235,22 +232,14 @@ documents.onDidClose((e) => {
   documentSettings.delete(e.document.uri)
 })
 
-// The content of a text document has changed. This event is emitted
-// when the text document first opened or when its content has changed.
-documents.onDidChangeContent(async (change) => {
-  const diagnostics = await diagnosticsProvider.getDiagnostics(change.document)
-  connection.sendDiagnostics({
-    uri: change.document.uri,
-    diagnostics,
-  })
-})
-
 // In this simple example we get the settings for every validate run.
 // const settings = await getDocumentSettings(textDocument.uri)
 
 connection.onDidChangeWatchedFiles(async (change) => {
   // taken from
   // https://github.com/conventional-changelog/commitlint/blob/4682b059bb8c78c45f10960435c0bd01194421fa/%40commitlint/load/src/utils/load-config.ts#L17-L33
+  // compare if up-to-date with master:
+  // https://github.com/conventional-changelog/commitlint/blob/master/%40commitlint/load/src/utils/load-config.ts
   const commitlintConfigFileNames = [
     'package.json',
     `.commitlintrc`,
@@ -294,12 +283,7 @@ connection.onDidChangeWatchedFiles(async (change) => {
   const documents = commitMessageProvider.getDocuments()
 
   // re-evaluate diagnostics
-  await Promise.all(
-    documents.map(async (document) => {
-      const diagnostics = await diagnosticsProvider.getDiagnostics(document)
-      connection.sendDiagnostics({ uri: document.uri, diagnostics })
-    })
-  )
+  diagnosticsProvider.refreshDiagnostics()
 })
 
 // connection.onDidOpenTextDocument((handler) => {

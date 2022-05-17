@@ -1,14 +1,64 @@
-import { Diagnostic } from 'vscode-languageserver/node'
-import { CommitMessageProvider, PartialTextDocument } from './commit-message-provider'
+import { TextDocument } from 'vscode-languageserver-textdocument'
+import { DiagnosticFeatureShape } from 'vscode-languageserver/lib/common/diagnostic'
+import { CancellationToken, Diagnostic, DocumentDiagnosticParams, DocumentDiagnosticReport, DocumentDiagnosticReportPartialResult, ResultProgressReporter, TextDocuments, WorkDoneProgressReporter } from 'vscode-languageserver/node'
+import {
+  CommitMessageProvider,
+  PartialTextDocument,
+} from './commit-message-provider'
 import * as commitlint from './commitlint'
 
 export class DiagnosticsProvider {
-  constructor(private readonly commitMessageProvider: CommitMessageProvider) {}
-
-  async getDiagnostics(textDocument: PartialTextDocument): Promise<Diagnostic[]> {
-    const parsedTree = await this.commitMessageProvider.getParsedTreeForDocument(
-      textDocument
+  constructor(
+    private readonly commitMessageProvider: CommitMessageProvider,
+    private readonly diagnosticFeature: DiagnosticFeatureShape['diagnostics'],
+    private readonly documents: TextDocuments<TextDocument>,
+  ) {
+    diagnosticFeature.on(
+      (
+        documentDiagnosticParams,
+        cancellationToken,
+        workDoneProgressReporter,
+        resultProgressReporter
+      ) =>
+        this.handleDiagnosticsRequest(
+          documentDiagnosticParams,
+          cancellationToken,
+          workDoneProgressReporter,
+          resultProgressReporter
+        )
     )
+  }
+
+  refreshDiagnostics() {
+    this.diagnosticFeature.refresh()
+  }
+
+  async handleDiagnosticsRequest(
+    documentDiagnosticParams: DocumentDiagnosticParams,
+    cancellationToken: CancellationToken,
+    workDoneProgressReporter: WorkDoneProgressReporter,
+    resultProgressReporter: ResultProgressReporter<DocumentDiagnosticReportPartialResult> | undefined
+  ): Promise<DocumentDiagnosticReport> {
+    const document = this.documents.get(documentDiagnosticParams.textDocument.uri)
+
+    if (!document) {
+      return {
+        resultId: '12345', // TODO: use a better resultId
+        kind: 'unchanged',
+      }
+    }
+
+    return {
+      items: await this.getDiagnosticsForDocument(document),
+      kind: 'full',
+    }
+  }
+
+  async getDiagnosticsForDocument(
+    textDocument: PartialTextDocument
+  ): Promise<Diagnostic[]> {
+    const parsedTree =
+      await this.commitMessageProvider.getParsedTreeForDocument(textDocument)
 
     if (!parsedTree) {
       console.warn(`OnValidate: Could not parse tree from input`)

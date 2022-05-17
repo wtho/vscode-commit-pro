@@ -94,7 +94,9 @@ export function createScanner(
   function scanWord(): string {
     let result = '',
       start = pos
-    const wordRegexp = /\p{L}|\p{Pc}|\p{Pd}/u
+    // see unicode property escapes
+    // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Regular_Expressions/Unicode_Property_Escapes
+    const wordRegexp = /\p{Letter}|\p{Connector_Punctuation}|\p{Dash_Punctuation}/u
     const isWord = (char: string): boolean => wordRegexp.test(char)
 
     while (true) {

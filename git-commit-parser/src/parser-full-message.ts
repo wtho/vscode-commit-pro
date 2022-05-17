@@ -156,12 +156,28 @@ export function parseTreeFullMessage(
       lastNonCommentLine === 'empty' ||
       lastNonCommentLine === 'footer-start-end' ||
       lastNonCommentLine === 'footer-end'
-    if (
-      lastNonCommentLineEmptyOrFooter &&
-      lineNodes.length > 2 &&
-      (lineNodes.at(0)!.type === 'word' ||
-        lineNodes.at(0)!.type === 'breaking-change-literal')
-    ) {
+    const canLineBeFooterToken = (footerLineNodes: LineWiseNode[]): boolean => {
+      if (!lastNonCommentLineEmptyOrFooter) {
+        return false
+      }
+      if (footerLineNodes.length <= 2) {
+        return false
+      }
+      const firstNode = footerLineNodes.at(0)!
+      if (!['word', 'breaking-change-literal'].includes(firstNode.type)) {
+        return false
+      }
+      const isWord = (node: LineWiseNode): node is LineWiseValueNode<'word'> => node.type === 'word'
+      // we require footer tokens to start and end with a letter, no connector/dash
+      // valid example: "Signed-off-by: some@mail.com"
+      // invalid example: "-Signed-off-by-: some@mail.com"
+      const footerTokenRegexp = /^\p{Letter}.*\p{Letter}$/u
+      if (isWord(firstNode) && !footerTokenRegexp.test(firstNode.value ?? '')) {
+        return false
+      }
+      return true
+    }
+    if (canLineBeFooterToken(lineNodes)) {
       const secondNode = lineNodes.at(1)! as LineWiseValueNode<NodeValueType>
       const thirdNode = lineNodes.at(2)! as LineWiseValueNode<NodeValueType>
       if (
