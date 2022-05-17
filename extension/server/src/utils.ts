@@ -26,7 +26,7 @@ export function textToCase(text: string, newCase: Case): string {
     return convertCase.toPascalCase(text)
   }
   if (newCase === 'sentence-case') {
-    return convertCase.toSentenceCase(text)
+    return toSentenceCase(text)
   }
   if (newCase === 'snake-case') {
     return convertCase.toSnakeCase(text)
@@ -38,4 +38,26 @@ export function textToCase(text: string, newCase: Case): string {
     return text.toLocaleUpperCase()
   }
   return text
+}
+
+export function toSentenceCase(text: string): string {
+  if (!text || typeof text !== 'string') {
+    return ''
+  }
+  const convertSentence = (sentence: string): string => {
+    const converted = sentence
+      .replace(
+        /([a-z])([A-Z])/g,
+        (_substring, lower, upper) => `${lower} ${upper.toLowerCase()}`
+      )
+      // .replace(/[^A-Za-z0-9]+|_+/g, ' ')
+      .toLowerCase()
+    return `${converted.charAt(0).toUpperCase()}${converted.slice(1)}`
+  }
+
+  return text.replace(
+    /([^\.;:?! ][^\.;:?!]+)([\.;:?!])/g,
+    (_substring, sentence, punctuation) =>
+      `${convertSentence(sentence)}${punctuation}`
+  )
 }

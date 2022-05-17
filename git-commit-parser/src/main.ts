@@ -3,6 +3,7 @@ export {
   parseCommit,
   getRangeForCommitPosition,
   getFirstNodeOfType,
+  getLastNodeOfType,
   getStringContentOfNode,
   findNodeAtOffset,
   ParseOutcome

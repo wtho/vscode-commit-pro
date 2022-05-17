@@ -314,9 +314,6 @@ export function parseTreeLineWise(
     if (scanner.getToken() === SyntaxKind.ColonMark) {
       onHeaderColon()
       scanNext()
-      if (scanner.getToken() === SyntaxKind.SpaceLiteral) {
-        scanNext()
-      }
       return true
     }
     return false
@@ -439,6 +436,9 @@ export function parseTreeLineWise(
     }
     if (scanner.getToken() === SyntaxKind.ColonMark) {
       parseHeaderColon()
+    }
+    if (scanner.getToken() === SyntaxKind.SpaceLiteral) {
+      parseWhitespace()
     }
     onDescriptionBegin()
     while (

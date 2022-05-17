@@ -10,6 +10,7 @@ import { CommitMessageProvider } from './commit-message-provider'
 import { GitService } from './git-service'
 import similarity from 'similarity'
 import { Case, caseArray, textToCase } from './utils'
+import { InnerNode } from 'git-commit-parser'
 
 export interface RuleData {
   ruleName: string
@@ -141,8 +142,56 @@ export class CodeActionProvider {
     severity: 'error' | 'warning',
     ruleArgs: unknown
   ): Promise<CodeAction[]> {
-    // TODO implementation
-    return []
+    const mustBeEmpty = condition === 'always'
+
+    if (!mustBeEmpty) {
+      // there is no way to suggest a footer
+      // except of machine learning analysis some day
+      return []
+    }
+
+    const parsedCommit =
+      await this.commitMessageProvider.getParsedTreeForDocumentUri(
+        textDocumentUri
+      )
+    
+    const rootNode = parsedCommit?.parseOutcome?.root
+    if (!rootNode || rootNode.type !== 'message') {
+      return []
+    }
+    const footerNodes = (rootNode as InnerNode).children.filter(child => child.type === 'footer')
+    
+    if (footerNodes?.length === 0) {
+      return []
+    }
+    const footersStart = footerNodes.at(0)?.range?.start
+    const footersEnd = footerNodes.at(-1)?.range?.end
+
+    if (!footersStart || !footersEnd) {
+      return []
+    }
+
+    const title = footerNodes.length === 1 ? `Delete the footer.` : `Delete all footers.`
+    const editChange: TextEdit = {
+      newText: ``,
+      range: {
+        start: footersStart,
+        end: footersEnd,
+      }
+    }
+
+    return [
+      {
+        title,
+        kind: 'quickfix',
+        diagnostics: [diagnostic],
+        edit: {
+          changes: {
+            [textDocumentUri]: [editChange],
+          },
+        },
+      },
+    ]
   }
 
   async provideCodeActionFooterLeadingBlank(
@@ -163,8 +212,47 @@ export class CodeActionProvider {
     severity: 'error' | 'warning',
     ruleArgs: unknown
   ): Promise<CodeAction[]> {
-    // TODO implementation
-    return []
+    const mustBeInCase = condition === 'always'
+
+    if (typeof ruleArgs !== 'string' || !caseArray.includes(ruleArgs as Case)) {
+      return []
+    }
+
+    const parsedCommit =
+      await this.commitMessageProvider.getParsedTreeForDocumentUri(
+        textDocumentUri
+      )
+
+    const currentHeaderValue = parsedCommit?.parseOutcome?.header?.raw
+
+    if (!currentHeaderValue) {
+      return []
+    }
+
+    const definedCase = ruleArgs as Case
+    const desiredCase: Case = mustBeInCase
+      ? definedCase
+      : definedCase === 'lower-case'
+      ? 'sentence-case'
+      : 'lower-case'
+
+    const headerInDesiredCase = textToCase(currentHeaderValue, desiredCase)
+
+    return [
+      {
+        title: `Change header to '${headerInDesiredCase}', applying case '${desiredCase}'.`,
+        edit: {
+          changes: {
+            [textDocumentUri]: [
+              {
+                newText: headerInDesiredCase,
+                range: diagnostic.range,
+              },
+            ],
+          },
+        },
+      },
+    ]
   }
 
   async provideCodeActionHeaderFullStop(
@@ -174,8 +262,48 @@ export class CodeActionProvider {
     severity: 'error' | 'warning',
     ruleArgs: unknown
   ): Promise<CodeAction[]> {
-    // TODO implementation
-    return []
+    if (typeof ruleArgs !== 'string' || ruleArgs.length < 1) {
+      return []
+    }
+
+    const fullStopChar = ruleArgs
+    const addFullStop = condition === 'always'
+
+    const title = addFullStop
+      ? `Add '${fullStopChar}' to header end.`
+      : `Remove '${fullStopChar}' from header end.`
+
+    const editChange = addFullStop
+      ? {
+          newText: fullStopChar,
+          range: {
+            start: diagnostic.range.end,
+            end: diagnostic.range.end,
+          },
+        }
+      : {
+          newText: ``,
+          range: {
+            start: {
+              line: diagnostic.range.end.line,
+              character: diagnostic.range.end.character - fullStopChar.length,
+            },
+            end: diagnostic.range.end,
+          },
+        }
+
+    return [
+      {
+        title,
+        kind: 'quickfix',
+        diagnostics: [diagnostic],
+        edit: {
+          changes: {
+            [textDocumentUri]: [editChange],
+          },
+        },
+      },
+    ]
   }
 
   async provideCodeActionScopeCase(
@@ -242,16 +370,16 @@ export class CodeActionProvider {
       ? 'sentence-case'
       : 'lower-case'
 
-    const typeInDesiredCase = textToCase(currentDescriptionValue, desiredCase)
+    const descriptionInDesiredCase = textToCase(currentDescriptionValue, desiredCase)
 
     return [
       {
-        title: `Change description to '${typeInDesiredCase}', applying case '${desiredCase}'.`,
+        title: `Change description to '${descriptionInDesiredCase}', applying case '${desiredCase}'.`,
         edit: {
           changes: {
             [textDocumentUri]: [
               {
-                newText: typeInDesiredCase,
+                newText: descriptionInDesiredCase,
                 range: diagnostic.range,
               },
             ],

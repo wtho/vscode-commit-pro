@@ -236,7 +236,6 @@ export function getFirstNodeOfType(
   if (['header', 'body', 'footer'].includes(type)) {
     // smart search for whole body
     const sectionNode = rootNode.children?.find((node) => node.type === type)
-    // TODO: multiple footers possible!
     if (sectionNode) {
       return sectionNode
     }
@@ -280,6 +279,59 @@ export function getFirstNodeOfType(
   return undefined
 }
 
+export function getLastNodeOfType(
+  rootNode: Node,
+  type: NodeType
+): Node | undefined {
+  if (!('children' in rootNode)) {
+    return undefined
+  }
+  if (['header', 'body', 'footer'].includes(type)) {
+    // smart search for whole body
+    const children = [...rootNode.children].reverse()
+    const sectionNode = children.find((node) => node.type === type)
+    if (sectionNode) {
+      return sectionNode
+    }
+  }
+  if (
+    ['type', 'scope', 'description', 'breaking-exclamation-mark'].includes(type)
+  ) {
+    // smart search in header
+    const headerNode = rootNode.children?.find((node) => node.type === 'header')
+    if (headerNode && 'children' in headerNode && headerNode.children?.length) {
+      const searchedForNode = headerNode.children.find(
+        (node) => node.type === type
+      )
+      if (searchedForNode) {
+        return searchedForNode
+      }
+    }
+    // otherwise get first line
+    return undefined
+  }
+  // generic search
+  const searchRecursively = (targetNode: Node): Node | undefined => {
+    if (targetNode.type === type) {
+      return targetNode
+    }
+    if (!('children' in targetNode)) {
+      return undefined
+    }
+    const children = [...targetNode.children].reverse()
+    const innerTarget = children.find((node) => searchRecursively(node))
+    if (innerTarget) {
+      return innerTarget
+    }
+    return undefined
+  }
+  const result = searchRecursively(rootNode)
+  if (result) {
+    return result
+  }
+  return undefined
+}
+
 export function getStringContentOfNode(
   node: Node | LineWiseNode | undefined
 ): string {
@@ -300,6 +352,16 @@ export function getRangeForCommitPosition(
   type: NodeType
 ): Range {
   const node = getFirstNodeOfType(rootNode, type)
+
+  if (type === 'footer') {
+    const last = getLastNodeOfType(rootNode, type)
+    if (node && last) {
+      return {
+        start: node?.range.start,
+        end: last?.range.end,
+      }
+    }
+  }
 
   if (node) {
     return node.range
