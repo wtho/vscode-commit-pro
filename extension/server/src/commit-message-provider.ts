@@ -18,6 +18,7 @@ export interface ConfigSet {
   config: Config
   configUri: ConfigurationUri | null
   configPath: string
+  isDefaultConfig: boolean
   workspaceUri: string | null
   messages: Set<DocumentUri>
 }
@@ -172,7 +173,7 @@ export class CommitMessageProvider {
     const workspacesForDoc = workspaceFolders?.filter((workspaceFolder) =>
       documentUri.startsWith(workspaceFolder.uri)
     )
-    const workspacesWithConfig = await Promise.all(
+    const workspacesWithMaybeConfig = await Promise.all(
       workspacesForDoc?.map(async (workspaceFolder) => {
         const workspaceSettings = {
           commitlintConfigFilePath: undefined,
@@ -182,6 +183,7 @@ export class CommitMessageProvider {
         return { config, workspaceFolder }
       }) ?? []
     )
+    const workspacesWithConfig = workspacesWithMaybeConfig.filter(ws => ws.config.path !== 'unknown')
 
     if (workspacesWithConfig.length > 0) {
       // TODO: what if there are multiple configs?
@@ -196,6 +198,7 @@ export class CommitMessageProvider {
         config: workspaceWithConfig.config.config,
         configPath: workspaceWithConfig.config.path,
         configUri,
+        isDefaultConfig: workspaceWithConfig.config.default,
         workspaceUri: workspaceWithConfig.workspaceFolder.uri,
         messages: new Set<DocumentUri>(),
       }
@@ -221,6 +224,7 @@ export class CommitMessageProvider {
       config: defaultConfig.config,
       configUri: defaultConfigUri,
       configPath: defaultConfig.path,
+      isDefaultConfig: defaultConfig.default,
       workspaceUri: null,
       messages: new Set<DocumentUri>(),
     }

@@ -7,12 +7,7 @@ import {
 import { CommitMessageProvider, ConfigSet } from './commit-message-provider'
 import * as parser from 'git-commit-parser'
 import { GitService } from './git-service'
-
-export interface WorkspaceScope {
-  label: string
-  origin: string
-  type: string
-}
+import { WorkspaceScopeProvider } from './workspace-scope-provider'
 
 const defaultTypeCompletions = [
   {
@@ -88,7 +83,7 @@ export class CompletionProvider {
   constructor(
     private readonly commitMessageProvider: CommitMessageProvider,
     private readonly gitService: GitService,
-    private readonly workspaceScopeRequester: () => Promise<WorkspaceScope[]>
+    private readonly workspaceScopeProvider: WorkspaceScopeProvider
   ) {}
   // This handler provides the initial list of the completion items.
   async provideCompletion(
@@ -279,7 +274,7 @@ export class CompletionProvider {
       // * lastly workspace which have NOT been in history
 
       const [workspaceCompletions, scopeData] = await Promise.all([
-        this.workspaceScopeRequester(),
+        this.workspaceScopeProvider.requestScopes(),
         this.gitService.getScopeDataForWorkspace(configSet.workspaceUri),
       ])
 

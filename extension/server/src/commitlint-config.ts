@@ -1,5 +1,5 @@
-import * as configConventional from '@commitlint/config-conventional'
-import * as configConventionalParserOpts from 'conventional-changelog-conventionalcommits'
+import configConventional from '@commitlint/config-conventional'
+import configConventionalParserOpts from 'conventional-changelog-conventionalcommits'
 
 import type {
   ParserOptions,
@@ -23,7 +23,11 @@ export interface WorkspaceSettings {
 export async function loadConfig({
   commitlintConfigFilePath,
   workspacePath,
-}: WorkspaceSettings): Promise<{ config: Config; path: string }> {
+}: WorkspaceSettings): Promise<{
+  config: Config
+  path: string
+  default: boolean
+}> {
   const cwd =
     commitlintConfigFilePath && isAbsolute(commitlintConfigFilePath)
       ? dirname(commitlintConfigFilePath)
@@ -43,14 +47,17 @@ export async function loadConfig({
       commitlintLoadConfig(cwd!),
     ])
 
-  if (config) {
-    return { config, path: configPath?.filepath ?? 'unknown' }
+  if (config && configPath) {
+    return { config, path: configPath?.filepath ?? 'unknown', default: false }
   }
 
   // default config
-  config = { ...configConventional }
+  config = {
+    ...configConventional,
+    parserPreset: availableParserPresets['conventional-changelog-conventionalcommits'],
+  }
   if (!config) {
-    return { config, path: 'unknown' }
+    return { config, path: 'unknown', default: true }
   }
   if (
     typeof config?.parserPreset === 'string' &&
@@ -76,7 +83,7 @@ export async function loadConfig({
     }
     config.parserOpts = parserOpts
   }
-  return { config, path: 'default' }
+  return { config, path: 'default', default: true }
 }
 
 export const availableParserPresets: Record<string, ParserPreset> = {

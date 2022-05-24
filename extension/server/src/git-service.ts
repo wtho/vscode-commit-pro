@@ -1,6 +1,12 @@
 import { URI } from 'vscode-languageserver/node'
 import * as parser from 'git-commit-parser'
 
+export interface HistoryScope {
+  scope: string
+  count: number
+  lastUsed: string
+}
+
 type ResolvablePromise<T> = Promise<T> & {
   resolve?: (arg: T) => void
   reject?: (error: Error) => void
@@ -207,7 +213,12 @@ export class GitService {
         return
       }
       const { header, authorName, commitDate, type, scope } = commit
-      currentRepo.commitSummaries.push({ commitId, commitDate, header, authorName })
+      currentRepo.commitSummaries.push({
+        commitId,
+        commitDate,
+        header,
+        authorName,
+      })
 
       if (type) {
         if (!currentRepo.typeStats.has(type)) {
@@ -278,9 +289,7 @@ export class GitService {
     })
   }
 
-  async getScopeDataForWorkspace(
-    workspaceUri: URI
-  ): Promise<{ scope: string; count: number; lastUsed: string }[]> {
+  async getScopeDataForWorkspace(workspaceUri: URI): Promise<HistoryScope[]> {
     const repoData = this.gitForRepoUri.get(workspaceUri)
     if (!repoData) {
       return []

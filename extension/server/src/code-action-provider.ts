@@ -4,13 +4,15 @@ import {
   Command,
   Diagnostic,
   DiagnosticSeverity,
+  Range,
   TextEdit,
 } from 'vscode-languageserver'
 import { CommitMessageProvider } from './commit-message-provider'
 import { GitService } from './git-service'
 import similarity from 'similarity'
 import { Case, caseArray, textToCase } from './utils'
-import { InnerNode } from 'git-commit-parser'
+import * as parser from 'git-commit-parser'
+import { Rule, RuleConfigSeverity } from '@commitlint/types'
 
 export interface RuleData {
   ruleName: string
@@ -98,8 +100,47 @@ export class CodeActionProvider {
     severity: 'error' | 'warning',
     ruleArgs: unknown
   ): Promise<CodeAction[]> {
-    // TODO implementation
-    return []
+    const mustBeInCase = condition === 'always'
+
+    if (typeof ruleArgs !== 'string' || !caseArray.includes(ruleArgs as Case)) {
+      return []
+    }
+
+    const parsedCommit =
+      await this.commitMessageProvider.getParsedTreeForDocumentUri(
+        textDocumentUri
+      )
+
+    const currentHeaderValue = parsedCommit?.parseOutcome?.body
+
+    if (!currentHeaderValue) {
+      return []
+    }
+
+    const definedCase = ruleArgs as Case
+    const desiredCase: Case = mustBeInCase
+      ? definedCase
+      : definedCase === 'lower-case'
+      ? 'sentence-case'
+      : 'lower-case'
+
+    const bodyInDesiredCase = textToCase(currentHeaderValue, desiredCase)
+
+    return [
+      {
+        title: `Change body applying case '${desiredCase}'.`,
+        edit: {
+          changes: {
+            [textDocumentUri]: [
+              {
+                newText: bodyInDesiredCase,
+                range: diagnostic.range,
+              },
+            ],
+          },
+        },
+      },
+    ]
   }
 
   async provideCodeActionBodyEmpty(
@@ -109,8 +150,54 @@ export class CodeActionProvider {
     severity: 'error' | 'warning',
     ruleArgs: unknown
   ): Promise<CodeAction[]> {
-    // TODO implementation
-    return []
+    const mustBeEmpty = condition === 'always'
+
+    if (!mustBeEmpty) {
+      // there is no way to suggest a body
+      // except of machine learning analysis some day
+      return []
+    }
+
+    const parsedCommit =
+      await this.commitMessageProvider.getParsedTreeForDocumentUri(
+        textDocumentUri
+      )
+
+    const rootNode = parsedCommit?.parseOutcome?.root
+    if (!rootNode || rootNode.type !== 'message') {
+      return []
+    }
+    const bodyNode = (rootNode as parser.InnerNode).children.find(
+      (child) => child.type === 'body'
+    )
+
+    const bodyStart = bodyNode?.range?.start
+    const bodyEnd = bodyNode?.range?.end
+
+    if (!bodyStart || !bodyEnd) {
+      return []
+    }
+
+    const editChange: TextEdit = {
+      newText: ``,
+      range: {
+        start: bodyStart,
+        end: bodyEnd,
+      },
+    }
+
+    return [
+      {
+        title: `Delete the body.`,
+        kind: 'quickfix',
+        diagnostics: [diagnostic],
+        edit: {
+          changes: {
+            [textDocumentUri]: [editChange],
+          },
+        },
+      },
+    ]
   }
 
   async provideCodeActionBodyFullStop(
@@ -120,8 +207,48 @@ export class CodeActionProvider {
     severity: 'error' | 'warning',
     ruleArgs: unknown
   ): Promise<CodeAction[]> {
-    // TODO implementation
-    return []
+    if (typeof ruleArgs !== 'string' || ruleArgs.length < 1) {
+      return []
+    }
+
+    const fullStopChar = ruleArgs
+    const addFullStop = condition === 'always'
+
+    const title = addFullStop
+      ? `Add '${fullStopChar}' to body end.`
+      : `Remove '${fullStopChar}' from body end.`
+
+    const editChange = addFullStop
+      ? {
+          newText: fullStopChar,
+          range: {
+            start: diagnostic.range.end,
+            end: diagnostic.range.end,
+          },
+        }
+      : {
+          newText: ``,
+          range: {
+            start: {
+              line: diagnostic.range.end.line,
+              character: diagnostic.range.end.character - fullStopChar.length,
+            },
+            end: diagnostic.range.end,
+          },
+        }
+
+    return [
+      {
+        title,
+        kind: 'quickfix',
+        diagnostics: [diagnostic],
+        edit: {
+          changes: {
+            [textDocumentUri]: [editChange],
+          },
+        },
+      },
+    ]
   }
 
   async provideCodeActionBodyLeadingBlank(
@@ -131,7 +258,112 @@ export class CodeActionProvider {
     severity: 'error' | 'warning',
     ruleArgs: unknown
   ): Promise<CodeAction[]> {
-    // TODO implementation
+    const mustBeLeadingBlank = condition === 'always'
+    const mustNotBeLeadingBlank = condition === 'never'
+
+    // body location
+    const parsedCommit =
+      await this.commitMessageProvider.getParsedTreeForDocumentUri(
+        textDocumentUri
+      )
+    const root = parsedCommit?.parseOutcome?.root
+    if (!root) {
+      return []
+    }
+    const bodyStart = parser.getFirstNodeOfType(root, 'footer')?.range?.start
+    if (!bodyStart) {
+      return []
+    }
+
+    if (mustBeLeadingBlank) {
+      return [
+        {
+          title: `Insert blank line before body.`,
+          kind: 'quickfix',
+          diagnostics: [diagnostic],
+          edit: {
+            changes: {
+              [textDocumentUri]: [
+                {
+                  newText: '\n',
+                  range: {
+                    start: bodyStart,
+                    end: bodyStart,
+                  },
+                },
+              ],
+            },
+          },
+        },
+      ]
+    }
+
+    if (mustNotBeLeadingBlank) {
+      // find all blank lines before body
+      const messageNode = root as parser.InnerNode
+      const indexOfBody = messageNode.children.findIndex(
+        (child) => child.type === 'body'
+      )
+      let currentStartLine = bodyStart.line
+      const linesToRemove: Range[] = []
+      for (let i = indexOfBody - 1; i >= 0; i--) {
+        const child = messageNode.children.at(i)!
+        if (child.type === 'header') {
+          if (child.range.end.line + 1 < currentStartLine) {
+            linesToRemove.push({
+              start: {
+                line: child.range.end.line + 1,
+                character: 0,
+              },
+              end: {
+                line: currentStartLine,
+                character: 0,
+              },
+            })
+          }
+          break
+        }
+        if (child.type === 'comment') {
+          if (child.range.end.line + 1 < currentStartLine) {
+            linesToRemove.push({
+              start: {
+                line: child.range.end.line + 1,
+                character: 0,
+              },
+              end: {
+                line: currentStartLine,
+                character: 0,
+              },
+            })
+          }
+          currentStartLine = child.range.start.line
+          continue
+        }
+      }
+
+      if (linesToRemove.length === 0) {
+        return []
+      }
+
+      const lineOrLinesText = linesToRemove.length > 1 ? 'lines' : 'line'
+
+      return [
+        {
+          title: `Remove blank ${lineOrLinesText} before body.`,
+          kind: 'quickfix',
+          diagnostics: [diagnostic],
+          edit: {
+            changes: {
+              [textDocumentUri]: linesToRemove.map((lineToRemove) => ({
+                newText: '',
+                range: lineToRemove,
+              })),
+            },
+          },
+        },
+      ]
+    }
+
     return []
   }
 
@@ -154,13 +386,15 @@ export class CodeActionProvider {
       await this.commitMessageProvider.getParsedTreeForDocumentUri(
         textDocumentUri
       )
-    
+
     const rootNode = parsedCommit?.parseOutcome?.root
     if (!rootNode || rootNode.type !== 'message') {
       return []
     }
-    const footerNodes = (rootNode as InnerNode).children.filter(child => child.type === 'footer')
-    
+    const footerNodes = (rootNode as parser.InnerNode).children.filter(
+      (child) => child.type === 'footer'
+    )
+
     if (footerNodes?.length === 0) {
       return []
     }
@@ -171,13 +405,14 @@ export class CodeActionProvider {
       return []
     }
 
-    const title = footerNodes.length === 1 ? `Delete the footer.` : `Delete all footers.`
+    const title =
+      footerNodes.length === 1 ? `Delete the footer.` : `Delete all footers.`
     const editChange: TextEdit = {
       newText: ``,
       range: {
         start: footersStart,
         end: footersEnd,
-      }
+      },
     }
 
     return [
@@ -201,7 +436,113 @@ export class CodeActionProvider {
     severity: 'error' | 'warning',
     ruleArgs: unknown
   ): Promise<CodeAction[]> {
-    // TODO implementation
+    const mustBeLeadingBlank = condition === 'always'
+    const mustNotBeLeadingBlank = condition === 'never'
+
+    // first footer location
+    const parsedCommit =
+      await this.commitMessageProvider.getParsedTreeForDocumentUri(
+        textDocumentUri
+      )
+    const root = parsedCommit?.parseOutcome?.root
+    if (!root) {
+      return []
+    }
+    const footerStart = parser.getFirstNodeOfType(root, 'footer')?.range?.start
+    if (!footerStart) {
+      return []
+    }
+
+    const footerOrFootersText =
+      (parsedCommit.parseOutcome?.footers.length ?? 0) > 1
+        ? 'footers'
+        : 'footer'
+
+    if (mustBeLeadingBlank) {
+      return [
+        {
+          title: `Insert blank line before ${footerOrFootersText}.`,
+          edit: {
+            changes: {
+              [textDocumentUri]: [
+                {
+                  newText: '\n',
+                  range: {
+                    start: footerStart,
+                    end: footerStart,
+                  },
+                },
+              ],
+            },
+          },
+        },
+      ]
+    }
+
+    if (mustNotBeLeadingBlank) {
+      // find all blank lines before footer
+      const messageNode = root as parser.InnerNode
+      const indexOfFirstFooter = messageNode.children.findIndex(
+        (child) => child.type === 'footer'
+      )
+      let currentStartLine = footerStart.line
+      const linesToRemove: Range[] = []
+      for (let i = indexOfFirstFooter - 1; i >= 0; i--) {
+        const child = messageNode.children.at(i)!
+        if (child.type === 'body' || child.type === 'header') {
+          if (child.range.end.line + 1 < currentStartLine) {
+            linesToRemove.push({
+              start: {
+                line: child.range.end.line + 1,
+                character: 0,
+              },
+              end: {
+                line: currentStartLine,
+                character: 0,
+              },
+            })
+          }
+          break
+        }
+        if (child.type === 'comment') {
+          if (child.range.end.line + 1 < currentStartLine) {
+            linesToRemove.push({
+              start: {
+                line: child.range.end.line + 1,
+                character: 0,
+              },
+              end: {
+                line: currentStartLine,
+                character: 0,
+              },
+            })
+          }
+          currentStartLine = child.range.start.line
+          continue
+        }
+      }
+
+      if (linesToRemove.length === 0) {
+        return []
+      }
+
+      const lineOrLinesText = linesToRemove.length > 1 ? 'lines' : 'line'
+
+      return [
+        {
+          title: `Remove blank  ${lineOrLinesText} before ${footerOrFootersText}.`,
+          edit: {
+            changes: {
+              [textDocumentUri]: linesToRemove.map((lineToRemove) => ({
+                newText: '',
+                range: lineToRemove,
+              })),
+            },
+          },
+        },
+      ]
+    }
+
     return []
   }
 
@@ -313,8 +654,47 @@ export class CodeActionProvider {
     severity: 'error' | 'warning',
     ruleArgs: unknown
   ): Promise<CodeAction[]> {
-    // TODO implementation
-    return []
+    const mustBeInCase = condition === 'always'
+
+    if (typeof ruleArgs !== 'string' || !caseArray.includes(ruleArgs as Case)) {
+      return []
+    }
+
+    const parsedCommit =
+      await this.commitMessageProvider.getParsedTreeForDocumentUri(
+        textDocumentUri
+      )
+
+    const currentScopeValue = parsedCommit?.parseOutcome?.header?.scope
+
+    if (!currentScopeValue) {
+      return []
+    }
+
+    const definedCase = ruleArgs as Case
+    const desiredCase: Case = mustBeInCase
+      ? definedCase
+      : definedCase === 'lower-case'
+      ? 'pascal-case'
+      : 'lower-case'
+
+    const scopeInDesiredCase = textToCase(currentScopeValue, desiredCase)
+
+    return [
+      {
+        title: `Change scope to '${scopeInDesiredCase}', applying case '${desiredCase}'.`,
+        edit: {
+          changes: {
+            [textDocumentUri]: [
+              {
+                newText: scopeInDesiredCase,
+                range: diagnostic.range,
+              },
+            ],
+          },
+        },
+      },
+    ]
   }
 
   async provideCodeActionScopeEmpty(
@@ -324,8 +704,69 @@ export class CodeActionProvider {
     severity: 'error' | 'warning',
     ruleArgs: unknown
   ): Promise<CodeAction[]> {
-    // TODO implementation
-    return []
+    const mustBeEmpty = condition === 'always'
+
+    if (!mustBeEmpty) {
+      // edit-in the parens
+      const parsedCommit =
+        await this.commitMessageProvider.getParsedTreeForDocumentUri(
+          textDocumentUri
+        )
+      const root = parsedCommit?.parseOutcome?.root
+      if (!root) {
+        return []
+      }
+      const typeRange = parser.getFirstNodeOfType(root, 'type')?.range
+      const hasScopeParenOpen = !!parser.getFirstNodeOfType(root, 'scope-paren-open')
+      const hasScopeParenClose = !!parser.getFirstNodeOfType(root, 'scope-paren-close')
+      if (!typeRange || hasScopeParenOpen || hasScopeParenClose) {
+        return []
+      }
+
+      return [
+        {
+          title: 'Insert parentheses for scope in header.',
+          kind: 'quickfix',
+          diagnostics: [diagnostic],
+          edit: {
+            changes: {
+              [textDocumentUri]: [TextEdit.insert(typeRange.end, '()')],
+            },
+          },
+        },
+      ]
+    }
+
+    const title = `Delete scope from header.`
+    const editChange: TextEdit = {
+      newText: ``,
+      range: {
+        start: {
+          line: diagnostic.range.start.line,
+          // this should be work, as the scope only starts with a '(',
+          character: diagnostic.range.start.character - 1,
+        },
+        end: {
+          line: diagnostic.range.end.line,
+          // this should be work, as the scope only ends with a ')',
+          // or goes on until the end of the line
+          character: diagnostic.range.end.character + 1,
+        },
+      },
+    }
+
+    return [
+      {
+        title,
+        kind: 'quickfix',
+        diagnostics: [diagnostic],
+        edit: {
+          changes: {
+            [textDocumentUri]: [editChange],
+          },
+        },
+      },
+    ]
   }
 
   async provideCodeActionScopeEnum(
@@ -335,8 +776,146 @@ export class CodeActionProvider {
     severity: 'error' | 'warning',
     ruleArgs: unknown
   ): Promise<CodeAction[]> {
-    // TODO implementation
-    return []
+    if (
+      !Array.isArray(ruleArgs) ||
+      ruleArgs.length < 1 ||
+      ruleArgs.some((arg) => typeof arg !== 'string')
+    ) {
+      return []
+    }
+
+    const parsedCommit =
+      await this.commitMessageProvider.getParsedTreeForDocumentUri(
+        textDocumentUri
+      )
+
+    // if blocklist: suggest removing (if not in conflict with scope-empty:never)
+    // or other suggestions (history based)
+    if (condition === 'never') {
+      const suggestions: CodeAction[] = []
+      const config = await this.commitMessageProvider.getConfig(
+        parsedCommit?.config?.configUri,
+        textDocumentUri
+      )
+
+      const scopeEmptyCondition = config?.config.rules?.['scope-empty']?.[1]
+      const scopeEmptyDisabled =
+        config?.config.rules?.['scope-empty']?.[0] ===
+        RuleConfigSeverity.Disabled
+      const scopeMustBeEmpty =
+        !scopeEmptyDisabled && scopeEmptyCondition === 'always'
+      const scopeMustNotBeEmpty =
+        !scopeEmptyDisabled && scopeEmptyCondition === 'never'
+
+      if (!scopeMustBeEmpty) {
+        // TODO get suggestions from history if they don't collide with blocklist
+      }
+
+      if (!scopeMustNotBeEmpty) {
+        suggestions.push({
+          title: 'Remove scope from header.',
+          kind: 'quickfix',
+          diagnostics: [diagnostic],
+          edit: {
+            changes: {
+              [textDocumentUri]: [
+                {
+                  newText: ``,
+                  range: {
+                    start: {
+                      line: diagnostic.range.start.line,
+                      character: diagnostic.range.start.character - 1,
+                    },
+                    end: {
+                      line: diagnostic.range.end.line,
+                      character: diagnostic.range.end.character + 1,
+                    },
+                  },
+                },
+              ],
+            },
+          },
+        })
+      }
+
+      return suggestions
+    }
+
+    const enumValues: string[] = ruleArgs
+
+    const currentScopeValue = parsedCommit?.parseOutcome?.header?.scope
+
+    // 1. suggest allowed scopes which begin with currentScopeValue
+    if (currentScopeValue) {
+      const startWithCurrentScope = enumValues.filter((value) =>
+        value.startsWith(currentScopeValue)
+      )
+      if (startWithCurrentScope.length > 0) {
+        return startWithCurrentScope.map((scope) => ({
+          title: `Change scope to '${scope}'.`,
+          kind: 'quickfix',
+          diagnostics: [diagnostic],
+          edit: {
+            changes: {
+              [textDocumentUri]: [
+                {
+                  newText: scope,
+                  range: diagnostic.range,
+                },
+              ],
+            },
+          },
+        }))
+      }
+    }
+    // 2. else suggest allowed types with small difference
+    // using levenshtein difference
+    if (currentScopeValue) {
+      const similarities = enumValues.map((scope, index) => ({
+        type: scope,
+        score: similarity(currentScopeValue, scope),
+        index,
+      }))
+      const closeMatches = similarities.filter(({ score }) => score > 0.3)
+
+      if (closeMatches.length > 0) {
+        const sortedMatches = closeMatches.sort((a, b) =>
+          a.score !== b.score ? b.score - b.score : a.index - a.index
+        )
+        return sortedMatches.map(({ type: scope }) => ({
+          title: `Change scope to '${scope}'.`,
+          kind: 'quickfix',
+          diagnostics: [diagnostic],
+          edit: {
+            changes: {
+              [textDocumentUri]: [
+                {
+                  newText: scope,
+                  range: diagnostic.range,
+                },
+              ],
+            },
+          },
+        }))
+      }
+    }
+
+    // 3. else suggest all allowed types
+    return enumValues.map((scope) => ({
+      title: `Change scope to '${scope}'.`,
+      kind: 'quickfix',
+      diagnostics: [diagnostic],
+      edit: {
+        changes: {
+          [textDocumentUri]: [
+            {
+              newText: scope,
+              range: diagnostic.range,
+            },
+          ],
+        },
+      },
+    }))
   }
 
   async provideCodeActionSubjectCase(
@@ -357,7 +936,8 @@ export class CodeActionProvider {
         textDocumentUri
       )
 
-    const currentDescriptionValue = parsedCommit?.parseOutcome?.header?.description
+    const currentDescriptionValue =
+      parsedCommit?.parseOutcome?.header?.description
 
     if (!currentDescriptionValue) {
       return []
@@ -370,7 +950,10 @@ export class CodeActionProvider {
       ? 'sentence-case'
       : 'lower-case'
 
-    const descriptionInDesiredCase = textToCase(currentDescriptionValue, desiredCase)
+    const descriptionInDesiredCase = textToCase(
+      currentDescriptionValue,
+      desiredCase
+    )
 
     return [
       {

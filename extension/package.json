@@ -27,11 +27,11 @@
       "type": "object",
       "title": "Example configuration",
       "properties": {
-        "languageServerExample.maxNumberOfProblems": {
+        "commitPro.enableDefaultCommitlintRulesDiagnostics": {
           "scope": "resource",
-          "type": "number",
-          "default": 100,
-          "description": "Controls the maximum number of problems produced by the server."
+          "type": "boolean",
+          "default": true,
+          "description": "enables the default commitlint rules to be applied even without a commilint config file which resemble the conventional commits specification"
         },
         "languageServerExample.trace.server": {
           "scope": "window",
@@ -78,12 +78,10 @@
     }
   },
   "configurationDefaults": {
-    "git-commit": {
-      "editor.semanticHighlighting.enabled": true
-    },
     "[git-commit]": {
       "editor.semanticHighlighting.enabled": true
-    }
+    },
+    "commitPro.enableDefaultCommitlintRulesDiagnostics": true
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",

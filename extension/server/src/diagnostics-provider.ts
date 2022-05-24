@@ -1,17 +1,28 @@
 import { TextDocument } from 'vscode-languageserver-textdocument'
 import { DiagnosticFeatureShape } from 'vscode-languageserver/lib/common/diagnostic'
-import { CancellationToken, Diagnostic, DocumentDiagnosticParams, DocumentDiagnosticReport, DocumentDiagnosticReportPartialResult, ResultProgressReporter, TextDocuments, WorkDoneProgressReporter } from 'vscode-languageserver/node'
+import {
+  CancellationToken,
+  Diagnostic,
+  DocumentDiagnosticParams,
+  DocumentDiagnosticReport,
+  DocumentDiagnosticReportPartialResult,
+  ResultProgressReporter,
+  TextDocuments,
+  WorkDoneProgressReporter,
+} from 'vscode-languageserver/node'
 import {
   CommitMessageProvider,
   PartialTextDocument,
 } from './commit-message-provider'
 import * as commitlint from './commitlint'
+import type { Workspace } from './server'
 
 export class DiagnosticsProvider {
   constructor(
     private readonly commitMessageProvider: CommitMessageProvider,
     private readonly diagnosticFeature: DiagnosticFeatureShape['diagnostics'],
     private readonly documents: TextDocuments<TextDocument>,
+    private readonly workspace: Workspace
   ) {
     diagnosticFeature.on(
       (
@@ -37,9 +48,13 @@ export class DiagnosticsProvider {
     documentDiagnosticParams: DocumentDiagnosticParams,
     cancellationToken: CancellationToken,
     workDoneProgressReporter: WorkDoneProgressReporter,
-    resultProgressReporter: ResultProgressReporter<DocumentDiagnosticReportPartialResult> | undefined
+    resultProgressReporter:
+      | ResultProgressReporter<DocumentDiagnosticReportPartialResult>
+      | undefined
   ): Promise<DocumentDiagnosticReport> {
-    const document = this.documents.get(documentDiagnosticParams.textDocument.uri)
+    const document = this.documents.get(
+      documentDiagnosticParams.textDocument.uri
+    )
 
     if (!document) {
       return {
@@ -57,18 +72,40 @@ export class DiagnosticsProvider {
   async getDiagnosticsForDocument(
     textDocument: PartialTextDocument
   ): Promise<Diagnostic[]> {
-    const parsedTree =
-      await this.commitMessageProvider.getParsedTreeForDocument(textDocument)
+    const getParsedTreeAndConfig = async () => {
+      const parsedTree =
+        await this.commitMessageProvider.getParsedTreeForDocument(textDocument)
 
-    if (!parsedTree) {
-      console.warn(`OnValidate: Could not parse tree from input`)
-      return []
+      if (!parsedTree) {
+        console.warn(
+          `getDiagnosticsForDocument: Could not parse tree from input`
+        )
+        throw new Error('Could not parse tree from input')
+      }
+
+      const config = await this.commitMessageProvider.getConfig(
+        parsedTree.config?.configUri,
+        textDocument.uri
+      )
+
+      return { parsedTree, config }
     }
 
-    const config = await this.commitMessageProvider.getConfig(
-      parsedTree.config?.configUri,
-      textDocument.uri
-    )
+    const getShouldUseDefaultRules = (): Promise<boolean> =>
+      this.workspace.getConfiguration(
+        'commitPro.enableDefaultCommitlintRulesDiagnostics'
+      )
+
+    const [{ parsedTree, config }, shouldUseDefaultRules] = await Promise.all([
+      getParsedTreeAndConfig(),
+      getShouldUseDefaultRules(),
+    ])
+
+    const { isDefaultConfig } = config
+
+    if (isDefaultConfig && !shouldUseDefaultRules) {
+      return []
+    }
 
     const { rules, ...options } = config?.config ?? {}
 

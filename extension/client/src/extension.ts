@@ -1,14 +1,24 @@
 import * as path from 'path'
-import { workspace, ExtensionContext, commands } from 'vscode'
+import { window, workspace, ExtensionContext, commands } from 'vscode'
 import {
   LanguageClient,
   LanguageClientOptions,
   ServerOptions,
   TransportKind,
 } from 'vscode-languageclient/node'
+import { CreateCommitlintConfigFileCommand } from './command-create-commitlint-config'
+import { DisableDefaultCommitlintRulesDiagnosticsCommand } from './command-disable-default-commitlint-rules'
+import { EnableDefaultCommitlintRulesDiagnosticsCommand } from './command-enable-default-commitlint-rules'
 import { OpenEditorCommand } from './command-open-editor'
+import { commitlintConfigFileGlobPattern } from './commitlint-config-file-names'
 import { GitClientService } from './git-client-service'
+import { LspClientService } from './lsp-client-service'
 import { WorkspaceClientService } from './workspace-client-service'
+
+export type ServerNotifications = Pick<
+  LanguageClient,
+  'onNotification' | 'sendNotification'
+>
 
 let client: LanguageClient
 
@@ -22,6 +32,11 @@ workspace.onDidOpenTextDocument((doc) => {
 
 export async function activate(context: ExtensionContext) {
   // context.subscriptions.push()
+  // await workspace
+  //   .getConfiguration('editor.semanticHighlighting.enabled', {
+  //     languageId: 'git-commit',
+  //   })
+  //   .update('', true, false)
 
   // The server is implemented in node
   const serverModule = context.asAbsolutePath(
@@ -42,26 +57,6 @@ export async function activate(context: ExtensionContext) {
     },
   }
 
-  // taken from
-  // https://github.com/conventional-changelog/commitlint/blob/4682b059bb8c78c45f10960435c0bd01194421fa/%40commitlint/load/src/utils/load-config.ts#L17-L33
-  const commitlintConfigFileNames = [
-    'package.json',
-    `.commitlintrc`,
-    `.commitlintrc.json`,
-    `.commitlintrc.yaml`,
-    `.commitlintrc.yml`,
-    `.commitlintrc.js`,
-    `.commitlintrc.cjs`,
-    `commitlint.config.js`,
-    `commitlint.config.cjs`,
-    // files supported by TypescriptLoader
-    `.commitlintrc.ts`,
-    `commitlint.config.ts`,
-  ]
-  const commitlintConfigFileGlobPattern = `**/{${commitlintConfigFileNames.join(
-    ','
-  )}}`
-
   // Options to control the language client
   const clientOptions: LanguageClientOptions = {
     // Register the server for plain text documents
@@ -77,28 +72,59 @@ export async function activate(context: ExtensionContext) {
     },
   }
 
-
-  const gitClientService = new GitClientService()
-
-  const openEditorCommand = new OpenEditorCommand(gitClientService)
-
-  context.subscriptions.push(
-    gitClientService,
-    commands.registerCommand(
-      openEditorCommand.command,
-      async () => {
-        const repoUris = await gitClientService.getRepoUris()
-        openEditorCommand.run(repoUris)
-      }
-    )
-  )
-
   // Create the language client and start the client.
   client = new LanguageClient(
-    'conventionalCommits',
-    'Conventional Commits',
+    'commit-pro',
+    'Commit Pro',
     serverOptions,
     clientOptions
+  )
+
+
+  const gitClientService = new GitClientService()
+  const workspaceClientService = new WorkspaceClientService(workspace)
+  const lspClientService = new LspClientService(client)
+
+  const openEditorCommand = new OpenEditorCommand(gitClientService)
+  const disableDefaultCommitlintRulesDiagnosticsCommand =
+    new DisableDefaultCommitlintRulesDiagnosticsCommand(workspace)
+  const enableDefaultCommitlintRulesDiagnosticsCommand =
+    new EnableDefaultCommitlintRulesDiagnosticsCommand(workspace)
+  const createCommitlintConfigFileCommand =
+    new CreateCommitlintConfigFileCommand(
+      workspace,
+      window,
+      workspaceClientService,
+      lspClientService
+    )
+
+  context.subscriptions.push(
+    workspaceClientService,
+    lspClientService,
+    gitClientService,
+
+    commands.registerCommand(openEditorCommand.command, async () => {
+      const repoUris = await gitClientService.getRepoUris()
+      openEditorCommand.run(repoUris)
+    }),
+    commands.registerCommand(
+      disableDefaultCommitlintRulesDiagnosticsCommand.command,
+      async () => {
+        disableDefaultCommitlintRulesDiagnosticsCommand.run()
+      }
+    ),
+    commands.registerCommand(
+      enableDefaultCommitlintRulesDiagnosticsCommand.command,
+      async () => {
+        enableDefaultCommitlintRulesDiagnosticsCommand.run()
+      }
+    ),
+    commands.registerCommand(
+      createCommitlintConfigFileCommand.command,
+      async () => {
+        createCommitlintConfigFileCommand.run()
+      }
+    )
   )
 
   gitClientService.event((event) => {
@@ -112,26 +138,38 @@ export async function activate(context: ExtensionContext) {
   // Start the client. This will also launch the server
   await client.start()
 
-  const workspaceClientService = new WorkspaceClientService(workspace)
-
-  context.subscriptions.push(workspaceClientService)
+  lspClientService.init()
 
   context.subscriptions.push(
     client.onNotification('gitCommit/requestRepoCommits', async (event) => {
       try {
-        const commitData = await gitClientService.getCommitData(event.uri, event.commitIds)
+        const commitData = await gitClientService.getCommitData(
+          event.uri,
+          event.commitIds
+        )
         client.sendNotification('gitCommit/repoCommits', commitData)
-      } catch { /* it's ok, server is outdated and is already getting notified */}
+      } catch {
+        /* it's ok, server is outdated and is already getting notified */
+      }
     }),
 
-    client.onNotification('gitCommit/requestScopeWorkspaceSuggestions', async (event) => {
-      try {
-        const suggestions = await workspaceClientService.getScopeSuggestions()
-        client.sendNotification('gitCommit/scopeWorkspaceSuggestions', suggestions)
-      } catch {
-        // TODO
+    client.onNotification(
+      'gitCommit/requestScopeWorkspaceSuggestions',
+      async (event) => {
+        try {
+          const suggestions = await workspaceClientService.getScopeSuggestions()
+          await client.sendNotification(
+            'gitCommit/scopeWorkspaceSuggestions',
+            suggestions
+          )
+        } catch {
+          await client.sendNotification(
+            'gitCommit/scopeWorkspaceSuggestions',
+            []
+          )
+        }
       }
-    })
+    )
   )
 
   gitClientService.fireInitialRepoUpdates()

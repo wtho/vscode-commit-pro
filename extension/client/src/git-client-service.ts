@@ -60,7 +60,10 @@ interface BaseCommit {
   commitDate: string
 }
 
-export class GitClientService extends EventEmitter<GitClientEvent> {
+export class GitClientService
+  extends EventEmitter<GitClientEvent>
+  implements Disposable
+{
   private initialization = createResolvablePromise<void>()
   private gitExtension = createResolvablePromise<GitExtension>()
   private gitApi = createResolvablePromise<GitApi | undefined>()
@@ -238,7 +241,8 @@ export class GitClientService extends EventEmitter<GitClientEvent> {
     const gitApi = await this.gitApi
     return gitApi.repositories.some(
       (repo) =>
-        repo.state.indexChanges.length === 0 && repo.state.mergeChanges.length === 0
+        repo.state.indexChanges.length === 0 &&
+        repo.state.mergeChanges.length === 0
     )
   }
 

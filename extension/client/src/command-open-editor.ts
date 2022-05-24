@@ -1,6 +1,5 @@
 import type { ChildProcess, ExecException, ExecOptions } from 'child_process'
 import * as url from 'url'
-import { Disposable } from 'vscode-languageclient'
 import { GitClientService } from './git-client-service'
 
 async function runWithShell(

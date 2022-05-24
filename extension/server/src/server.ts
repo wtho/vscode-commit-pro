@@ -14,25 +14,33 @@ import {
   CodeActionKind,
 } from 'vscode-languageserver/node'
 import { TextDocument } from 'vscode-languageserver-textdocument'
-import { EventEmitter } from 'stream'
+import * as url from 'url'
 
 import { SemanticTokensProvider } from './semantic-tokens-provider'
-import { CommitMessageProvider, } from './commit-message-provider'
-import { CompletionProvider, WorkspaceScope } from './completion-provider'
+import { CommitMessageProvider } from './commit-message-provider'
+import { CompletionProvider } from './completion-provider'
 import {
   BaseCommit,
   GitClientRepositoryCloseEvent,
   GitClientRepostoryUpdateEvent,
   GitService,
+  HistoryScope,
 } from './git-service'
 import { CodeActionProvider } from './code-action-provider'
 import { DiagnosticsProvider } from './diagnostics-provider'
+import { CodeLensProvider } from './code-lens-provider'
+import { WorkspaceScopeProvider } from './workspace-scope-provider'
 
 // Create a connection for the server, using Node's IPC as a transport.
 // Also include all preview / proposed LSP features.
 const connection = createConnection(ProposedFeatures.all)
 
-export type Workspace = typeof connection['workspace']
+export type Connection = typeof connection
+export type Workspace = Connection['workspace']
+export type Notifications = Pick<
+  Connection,
+  'onNotification' | 'sendNotification'
+>
 
 // Create a simple text document manager.
 const documents: TextDocuments<TextDocument> = new TextDocuments(TextDocument)
@@ -43,17 +51,11 @@ const commitMessageProvider = new CommitMessageProvider(
 )
 const gitService = new GitService()
 const semanticTokensProvider = new SemanticTokensProvider(commitMessageProvider)
+const workspaceScopeProvider = new WorkspaceScopeProvider(connection)
 const completionProvider = new CompletionProvider(
   commitMessageProvider,
   gitService,
-  () =>
-    new Promise<WorkspaceScope[]>((resolve, reject) => {
-      connection.sendNotification('gitCommit/requestScopeWorkspaceSuggestions')
-      workspaceScopeEventTarget.once(
-        'gitCommit/scopeWorkspaceSuggestions',
-        (scopes: WorkspaceScope[]) => resolve(scopes)
-      )
-    })
+  workspaceScopeProvider
 )
 
 const codeActionProvider = new CodeActionProvider(
@@ -64,7 +66,17 @@ const codeActionProvider = new CodeActionProvider(
 const diagnosticsProvider = new DiagnosticsProvider(
   commitMessageProvider,
   connection.languages.diagnostics,
-  documents
+  documents,
+  connection.workspace
+)
+
+connection.onDidChangeConfiguration((params) => {
+  console.log('config changed', params)
+})
+
+const codeLensProvider = new CodeLensProvider(
+  commitMessageProvider,
+  connection.workspace
 )
 
 let hasConfigurationCapability = false
@@ -72,7 +84,6 @@ let hasWorkspaceFolderCapability = false
 let hasDiagnosticRelatedInformationCapability = false
 
 connection.onInitialize((params: InitializeParams) => {
-  console.log('initializing language server')
   const capabilities = params.capabilities
 
   const semanticTokensCapabilities = capabilities.textDocument?.semanticTokens
@@ -112,11 +123,11 @@ connection.onInitialize((params: InitializeParams) => {
       // workspaceSymbolProvider: true,
       codeActionProvider: {
         codeActionKinds: [CodeActionKind.QuickFix],
+        // resolveProvider: true,
+      },
+      codeLensProvider: {
         resolveProvider: true,
       },
-      // codeLensProvider: {
-      // 	resolveProvider: true
-      // },
       // documentFormattingProvider: true,
       // documentRangeFormattingProvider: true,
       // documentOnTypeFormattingProvider: {
@@ -177,6 +188,12 @@ connection.onInitialized((params) => {
     SemanticTokensRegistrationType.type,
     registrationOptions
   )
+
+  // connection.workspace
+  //   .getConfiguration({
+  //     section: 'editor.semanticHighlighting',
+  //   })
+  //   .then((result) => console.log(result))
 })
 
 // The example settings
@@ -193,7 +210,7 @@ let globalSettings: ExampleSettings = defaultSettings
 // Cache the settings of all open documents
 const documentSettings: Map<string, Thenable<ExampleSettings>> = new Map()
 
-connection.onDidChangeConfiguration((change) => {
+connection.onDidChangeConfiguration(async (change) => {
   if (hasConfigurationCapability) {
     // Reset all cached document settings
     documentSettings.clear()
@@ -321,6 +338,8 @@ connection.onCodeAction((params) =>
   codeActionProvider.provideCodeActions(params)
 )
 
+connection.onCodeLens((params) => codeLensProvider.provideCodeLenses(params))
+
 connection.onNotification(
   'gitCommit/repoUpdate',
   (event: GitClientRepostoryUpdateEvent) => {
@@ -349,12 +368,26 @@ connection.onNotification(
   }
 )
 
-const workspaceScopeEventTarget = new EventEmitter()
-
 connection.onNotification(
-  'gitCommit/scopeWorkspaceSuggestions',
-  (event: { scopes: WorkspaceScope[] }) => {
-    workspaceScopeEventTarget.emit('gitCommit/scopeWorkspaceSuggestions', event)
+  'gitCommit/requestScopeHistorySuggestions',
+  async (event: unknown) => {
+    let suggestions: HistoryScope[] = []
+    try {
+      const workspaces = await connection.workspace.getWorkspaceFolders()
+      const workspaceUri = workspaces
+        ?.filter((ws) => !!ws.uri)
+        .map((ws) => ws.uri)[0]
+
+      if (workspaceUri) {
+        const scopes = await gitService.getScopeDataForWorkspace(workspaceUri)
+        suggestions = scopes
+      }
+    } finally {
+      await connection.sendNotification(
+        'gitCommit/scopeHistorySuggestions',
+        suggestions
+      )
+    }
   }
 )
 
