@@ -1,18 +1,18 @@
 {
-  "name": "vscode-conventional-commits-extension",
+  "name": "vscode-commit-pro-extension",
   "version": "0.1.0",
-  "description": "Author your Commit Message like your Code",
+  "description": "Write your Commit Message like a pro - like you write your Code",
   "keywords": [
     "vscode",
     "conventional-commits",
     "commit",
     "git"
   ],
-  "author": "Thomas Wirth <thomas@wtho.de",
+  "author": "Thomas Wirth <thomas@wtho.de>",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/wtho/vscode-conventional-commits.git"
+    "url": "git+https://github.com/wtho/vscode-commit-pro.git"
   },
   "engines": {
     "vscode": "^1.63.0"
@@ -51,7 +51,7 @@
         "command": "commitPro.editor.command.openEditor",
         "title": "Open Commit Message Editor",
         "category": "Git",
-        "icon": "$(edit)"
+        "icon": "$(wand)"
       }
     ],
     "menus": {
@@ -95,10 +95,10 @@
     "vscode-languageclient": "^8.0.1"
   },
   "devDependencies": {
-    "@types/node": "^17.0.34",
-    "@typescript-eslint/eslint-plugin": "^5.24.0",
-    "@typescript-eslint/parser": "^5.24.0",
-    "eslint": "^8.14.0",
-    "typescript": "^4.6.4"
+    "@types/node": "^17.0.35",
+    "@typescript-eslint/eslint-plugin": "^5.26.0",
+    "@typescript-eslint/parser": "^5.26.0",
+    "eslint": "^8.16.0",
+    "typescript": "^4.7.2"
   }
 }

@@ -2,11 +2,21 @@ import { parseTreeFullMessage } from './parser-full-message'
 import { LineWiseNode, parseTreeLineWise } from './parser-line-wise'
 
 export interface ParseOptions {
-  issuePrefixes?: string[]
   issuePrefixesCaseSensitive?: boolean
-  noteKeywords?: string[]
-  commentChar?: string
   strict?: boolean
+  breakingExclamationMarkAllowed?: boolean
+
+  // original commitlint parser options
+  commentChar?: string
+  headerCorrespondence?: string[]
+  headerPattern?: RegExp
+  breakingHeaderPattern?: RegExp
+  issuePrefixes?: string[]
+  mergeCorrespondence?: string[]
+  mergePattern?: RegExp
+  noteKeywords?: string[]
+  revertCorrespondence?: string[]
+  revertPattern?: RegExp
 }
 
 export const DEFAULT_PARSE_OPTIONS: ParseOptions = {
@@ -15,6 +25,7 @@ export const DEFAULT_PARSE_OPTIONS: ParseOptions = {
   noteKeywords: ['BREAKING CHANGE', 'BREAKING-CHANGE'],
   commentChar: '#',
   strict: false,
+  breakingExclamationMarkAllowed: true,
 }
 
 export interface ParseError {
@@ -156,9 +167,13 @@ export function parseCommit(
   text: string,
   parseOptions: ParseOptions = DEFAULT_PARSE_OPTIONS
 ): ParseOutcome {
+
+  const breakingExclamationMarkAllowed = doesConfigAllowBreakingExclamationMark(parseOptions, DEFAULT_PARSE_OPTIONS.breakingExclamationMarkAllowed ?? true)
+
   const options = {
     ...DEFAULT_PARSE_OPTIONS,
     ...(parseOptions ?? {}),
+    breakingExclamationMarkAllowed
   }
 
   const isMessage = (node: Node | undefined): node is InnerNode =>
@@ -416,4 +431,15 @@ export function findNodeAtOffset(
     return node
   }
   return undefined
+}
+
+export function doesConfigAllowBreakingExclamationMark(parseOptions: ParseOptions | undefined, defaultValue: boolean): boolean {
+  const exclamationMarkRelevantPattern = parseOptions?.headerPattern ?? parseOptions?.breakingHeaderPattern
+  if (typeof parseOptions?.breakingExclamationMarkAllowed === 'boolean') {
+    return parseOptions.breakingExclamationMarkAllowed
+  } else if (exclamationMarkRelevantPattern) {
+    // make an educated guess
+    return exclamationMarkRelevantPattern.source.includes('!')
+  }
+  return defaultValue
 }

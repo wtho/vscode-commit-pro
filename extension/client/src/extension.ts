@@ -80,6 +80,7 @@ export async function activate(context: ExtensionContext) {
     clientOptions
   )
 
+  client.getFeature
 
   const gitClientService = new GitClientService()
   const workspaceClientService = new WorkspaceClientService(workspace)

@@ -1,5 +1,5 @@
 {
-  "name": "vscode-conventional-commits",
+  "name": "vscode-commit-pro",
   "version": "0.1.0",
   "description": "Author your Commit Message like your Code",
   "keywords": [
@@ -8,7 +8,7 @@
     "commit",
     "git"
   ],
-  "author": "Thomas Wirth <thomas@wtho.de",
+  "author": "Thomas Wirth <thomas@wtho.de>",
   "license": "MIT",
   "repository": {
     "type": "git",

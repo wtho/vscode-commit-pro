@@ -148,6 +148,11 @@ export class CompletionProvider {
     const hasScope = !!parseOutcome.header?.scope
     const hasBreakingExclamationMark =
       !!parseOutcome.header?.breakingExclamationMark
+    const breakingExclamationMarkAllowed =
+      parser.doesConfigAllowBreakingExclamationMark(
+        configSet.config.parserOpts,
+        false
+      )
 
     const typeEnumRule = configSet?.config?.rules?.['type-enum']
     const ruleDisabled = (typeEnumRule?.[0] ?? 0) === 0
@@ -158,7 +163,11 @@ export class CompletionProvider {
     const enrichWithBreakingExclamationMark = (
       completions: CompletionItem[]
     ) => {
-      if (hasScope || hasBreakingExclamationMark) {
+      if (
+        hasScope ||
+        hasBreakingExclamationMark ||
+        !breakingExclamationMarkAllowed
+      ) {
         return completions
       }
       return completions.flatMap((completion) => {
@@ -308,7 +317,15 @@ export class CompletionProvider {
     configSet: ConfigSet,
     parseOutcome: parser.ParseOutcome
   ): CompletionItem[] {
-    // TODO: check if breaking exclamation mark is not wanted
+    // check if breaking exclamation mark is not wanted
+    const breakingExclamationMarkAllowed =
+      parser.doesConfigAllowBreakingExclamationMark(
+        configSet.config.parserOpts,
+        false
+      )
+    if (!breakingExclamationMarkAllowed) {
+      return []
+    }
 
     // check if breaking exclamation mark is already there
     const existingBreakingExclamationMark =
@@ -316,8 +333,6 @@ export class CompletionProvider {
     if (existingBreakingExclamationMark) {
       return []
     }
-
-    // TODO: also enable exclamation mark after type, not only after scope brackets
 
     return [
       {

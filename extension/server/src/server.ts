@@ -13,8 +13,6 @@ import {
   FileChangeType,
   CodeActionKind,
 } from 'vscode-languageserver/node'
-import { TextDocument } from 'vscode-languageserver-textdocument'
-import * as url from 'url'
 
 import { SemanticTokensProvider } from './semantic-tokens-provider'
 import { CommitMessageProvider } from './commit-message-provider'
@@ -30,6 +28,7 @@ import { CodeActionProvider } from './code-action-provider'
 import { DiagnosticsProvider } from './diagnostics-provider'
 import { CodeLensProvider } from './code-lens-provider'
 import { WorkspaceScopeProvider } from './workspace-scope-provider'
+import { TextDocument } from 'vscode-languageserver-textdocument'
 
 // Create a connection for the server, using Node's IPC as a transport.
 // Also include all preview / proposed LSP features.
@@ -39,7 +38,7 @@ export type Connection = typeof connection
 export type Workspace = Connection['workspace']
 export type Notifications = Pick<
   Connection,
-  'onNotification' | 'sendNotification'
+  'onNotification' | 'sendNotification' | 'sendRequest'
 >
 
 // Create a simple text document manager.
@@ -76,7 +75,8 @@ connection.onDidChangeConfiguration((params) => {
 
 const codeLensProvider = new CodeLensProvider(
   commitMessageProvider,
-  connection.workspace
+  connection.workspace,
+  connection
 )
 
 let hasConfigurationCapability = false
@@ -222,6 +222,8 @@ connection.onDidChangeConfiguration(async (change) => {
 
   // Revalidate all open text documents
   diagnosticsProvider.refreshDiagnostics()
+  console.log('refresh code lenses!')
+  codeLensProvider.refreshCodeLenses()
 })
 
 connection.onDefinition((params) => {
@@ -301,6 +303,7 @@ connection.onDidChangeWatchedFiles(async (change) => {
 
   // re-evaluate diagnostics
   diagnosticsProvider.refreshDiagnostics()
+  codeLensProvider.refreshCodeLenses()
 })
 
 // connection.onDidOpenTextDocument((handler) => {

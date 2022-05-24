@@ -92,9 +92,10 @@ export class DiagnosticsProvider {
     }
 
     const getShouldUseDefaultRules = (): Promise<boolean> =>
-      this.workspace.getConfiguration(
-        'commitPro.enableDefaultCommitlintRulesDiagnostics'
-      )
+      this.workspace.getConfiguration({
+        scopeUri: 'null',
+        section: 'commitPro.enableDefaultCommitlintRulesDiagnostics',
+      })
 
     const [{ parsedTree, config }, shouldUseDefaultRules] = await Promise.all([
       getParsedTreeAndConfig(),

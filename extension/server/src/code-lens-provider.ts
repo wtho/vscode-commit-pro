@@ -1,16 +1,18 @@
 import {
   CodeLens,
   CodeLensParams,
+  CodeLensRefreshRequest,
   Position,
   Range,
 } from 'vscode-languageserver'
 import { CommitMessageProvider } from './commit-message-provider'
-import type { Workspace } from './server'
+import type { Notifications, Workspace } from './server'
 
 export class CodeLensProvider {
   constructor(
     private readonly commitMessageProvider: CommitMessageProvider,
-    private readonly workspace: Workspace
+    private readonly workspace: Workspace,
+    private readonly notifications: Notifications,
   ) {}
 
   async provideCodeLenses(params: CodeLensParams): Promise<CodeLens[]> {
@@ -23,9 +25,11 @@ export class CodeLensProvider {
       params.textDocument.uri
     )
 
-    const defaultCommitlintRulesDiagnosticsEnabled = await this.workspace.getConfiguration(
-      'commitPro.enableDefaultCommitlintRulesDiagnostics'
-    )
+    const defaultCommitlintRulesDiagnosticsEnabled =
+      await this.workspace.getConfiguration({
+        scopeUri: 'null',
+        section: 'commitPro.enableDefaultCommitlintRulesDiagnostics',
+      })
 
     const hasConfigFile = !config.isDefaultConfig
 
@@ -37,7 +41,7 @@ export class CodeLensProvider {
         command: {
           title: 'Disable default commitlint rules',
           command: 'commitPro.command.disableDefaultCommitlintRulesDiagnostics',
-        }
+        },
       })
     }
     if (!hasConfigFile && !defaultCommitlintRulesDiagnosticsEnabled) {
@@ -46,7 +50,7 @@ export class CodeLensProvider {
         command: {
           title: 'Enable default commitlint rules',
           command: 'commitPro.command.enableDefaultCommitlintRulesDiagnostics',
-        }
+        },
       })
     }
     if (!hasConfigFile) {
@@ -55,10 +59,14 @@ export class CodeLensProvider {
         command: {
           title: 'Create commitlint config file',
           command: 'commitPro.command.createCommitlintConfigFile',
-        }
+        },
       })
     }
 
     return lenses
+  }
+
+  refreshCodeLenses() {
+    this.notifications.sendRequest(CodeLensRefreshRequest.type)
   }
 }

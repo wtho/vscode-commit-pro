@@ -1,4 +1,11 @@
-export type { ParseOptions, NodeType, Node, InnerNode, Range } from './parser'
+export type {
+  ParseOptions,
+  ParseOutcome,
+  NodeType,
+  Node,
+  InnerNode,
+  Range,
+} from './parser'
 export {
   parseCommit,
   getRangeForCommitPosition,
@@ -6,5 +13,5 @@ export {
   getLastNodeOfType,
   getStringContentOfNode,
   findNodeAtOffset,
-  ParseOutcome
+  doesConfigAllowBreakingExclamationMark,
 } from './parser'
