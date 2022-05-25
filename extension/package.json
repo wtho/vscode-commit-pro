@@ -28,21 +28,10 @@
       "title": "Example configuration",
       "properties": {
         "commitPro.enableDefaultCommitlintRulesDiagnostics": {
-          "scope": "resource",
+          "scope": "window",
           "type": "boolean",
           "default": true,
-          "description": "enables the default commitlint rules to be applied even without a commilint config file which resemble the conventional commits specification"
-        },
-        "languageServerExample.trace.server": {
-          "scope": "window",
-          "type": "string",
-          "enum": [
-            "off",
-            "messages",
-            "verbose"
-          ],
-          "default": "off",
-          "description": "Traces the communication between VS Code and the language server."
+          "description": "Enables the default commitlint rules to be applied even without a commilint config file which resemble the conventional commits specification"
         }
       }
     },

@@ -372,6 +372,7 @@ export function parseTreeLineWise(
       scanner.getToken() !== SyntaxKind.ExclamationMark &&
       scanner.getToken() !== SyntaxKind.ColonMark &&
       scanner.getToken() !== SyntaxKind.OpenParenMark &&
+      scanner.getToken() !== SyntaxKind.LineBreak &&
       scanner.getToken() !== SyntaxKind.EOF
     ) {
       if (!parseValue()) {
@@ -397,6 +398,7 @@ export function parseTreeLineWise(
       while (
         scanner.getToken() !== SyntaxKind.ColonMark &&
         scanner.getToken() !== SyntaxKind.CloseParenMark &&
+        scanner.getToken() !== SyntaxKind.LineBreak &&
         scanner.getToken() !== SyntaxKind.EOF
       ) {
         if (!parseValue()) {
@@ -419,6 +421,7 @@ export function parseTreeLineWise(
     while (
       scanner.getToken() !== SyntaxKind.ExclamationMark &&
       scanner.getToken() !== SyntaxKind.ColonMark &&
+      scanner.getToken() !== SyntaxKind.LineBreak &&
       scanner.getToken() !== SyntaxKind.EOF
     ) {
       // TODO: error?
@@ -429,6 +432,7 @@ export function parseTreeLineWise(
     }
     while (
       scanner.getToken() !== SyntaxKind.ColonMark &&
+      scanner.getToken() !== SyntaxKind.LineBreak &&
       scanner.getToken() !== SyntaxKind.EOF
     ) {
       // TODO: error?
