@@ -23,7 +23,7 @@
 		"@commitlint/load": "^17.0.0",
 		"@commitlint/parse": "^17.0.0",
 		"@commitlint/rules": "^17.0.0",
-		"conventional-changelog-conventionalcommits": "^4.6.3",
+		"conventional-changelog-conventionalcommits": "^5.0.0",
 		"git-commit-parser": "^0.1.0",
 		"js-convert-case": "^4.2.0",
 		"similarity": "^1.2.1",

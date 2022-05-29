@@ -38,7 +38,7 @@
     "commands": [
       {
         "command": "commitPro.editor.command.openEditor",
-        "title": "Open Commit Message Editor",
+        "title": "Open Commit Message in Code Editor",
         "category": "Git",
         "icon": "$(wand)"
       }
@@ -84,7 +84,7 @@
     "vscode-languageclient": "^8.0.1"
   },
   "devDependencies": {
-    "@types/node": "^17.0.35",
+    "@types/node": "^17.0.36",
     "@typescript-eslint/eslint-plugin": "^5.26.0",
     "@typescript-eslint/parser": "^5.26.0",
     "eslint": "^8.16.0",

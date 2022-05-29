@@ -2,6 +2,7 @@ import { TextDocument } from 'vscode-languageserver-textdocument'
 import { DiagnosticFeatureShape } from 'vscode-languageserver/lib/common/diagnostic'
 import {
   CancellationToken,
+  CodeDescription,
   Diagnostic,
   DocumentDiagnosticParams,
   DocumentDiagnosticReport,
@@ -16,6 +17,44 @@ import {
 } from './commit-message-provider'
 import * as commitlint from './commitlint'
 import type { Workspace } from './server'
+
+const commitlintRuleRefs = [
+  'body-full-stop',
+  'body-leading-blank',
+  'body-empty',
+  'body-max-length',
+  'body-max-line-length',
+  'body-min-length',
+  'body-case',
+  'footer-leading-blank',
+  'footer-empty',
+  'footer-max-length',
+  'footer-max-line-length',
+  'footer-min-length',
+  'header-case',
+  'header-full-stop',
+  'header-max-length',
+  'header-min-length',
+  'references-empty',
+  'scope-enum',
+  'scope-case',
+  'scope-empty',
+  'scope-max-length',
+  'scope-min-length',
+  'subject-case',
+  'subject-empty',
+  'subject-full-stop',
+  'subject-max-length',
+  'subject-min-length',
+  'subject-exclamation-mark',
+  'type-enum',
+  'type-case',
+  'type-empty',
+  'type-max-length',
+  'type-min-length',
+  'signed-off-by',
+  'trailer-exists',
+]
 
 export class DiagnosticsProvider {
   constructor(
@@ -42,6 +81,7 @@ export class DiagnosticsProvider {
 
   refreshDiagnostics() {
     this.diagnosticFeature.refresh()
+    // TODO: maybe also refresh hover provider
   }
 
   async handleDiagnosticsRequest(
@@ -123,6 +163,14 @@ export class DiagnosticsProvider {
         .filter(Boolean)
         .join(':')
       diagnostic.source = source
+      if (
+        typeof diagnostic.code === 'string' &&
+        commitlintRuleRefs.includes(diagnostic.code)
+      ) {
+        diagnostic.codeDescription = {
+          href: `https://commitlint.js.org/#/reference-rules?id=${diagnostic.code}`,
+        }
+      }
       return diagnostic
     })
 

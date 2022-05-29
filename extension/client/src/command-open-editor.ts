@@ -94,10 +94,11 @@ async function startGitCodeWait(folder: string, amend: boolean): Promise<string>
 
 export class OpenEditorCommand {
   public readonly command = 'commitPro.editor.command.openEditor'
+  public readonly commandAlternate = 'commitPro.editor.command.openEditorAmend'
 
   constructor(private readonly gitClientService: GitClientService) {}
 
-  public async run(gitUris: string[]): Promise<void> {
+  public async run(gitUris: string[], options?: { amend?: boolean }): Promise<void> {
     const [gitExecutive, codeExecutive] = await Promise.all([
       getGitExecutive(),
       getCodeExecutive(),
@@ -116,8 +117,7 @@ export class OpenEditorCommand {
 
     const folder = url.fileURLToPath(gitUris[0])
 
-    const gitIsClean = await this.gitClientService.isClean()
-    const amend = gitIsClean
+    const amend = options?.amend ?? await this.gitClientService.isClean()
 
     try {
       const resultMessage = await startGitCodeWait(folder, amend)

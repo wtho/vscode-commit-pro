@@ -108,6 +108,10 @@ export async function activate(context: ExtensionContext) {
       const repoUris = await gitClientService.getRepoUris()
       openEditorCommand.run(repoUris)
     }),
+    commands.registerCommand(openEditorCommand.commandAlternate, async () => {
+      const repoUris = await gitClientService.getRepoUris()
+      openEditorCommand.run(repoUris, { amend: true })
+    }),
     commands.registerCommand(
       disableDefaultCommitlintRulesDiagnosticsCommand.command,
       async () => {

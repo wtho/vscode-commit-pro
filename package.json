@@ -22,6 +22,6 @@
   ],
   "scripts": {
     "ts-projects:compile": "tsc -b",
-		"ts-projects:watch": "tsc -b -w"
+    "ts-projects:watch": "tsc -b -w"
   }
 }
