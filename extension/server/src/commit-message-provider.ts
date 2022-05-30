@@ -260,8 +260,11 @@ export class CommitMessageProvider {
     }
   }
 
-  async configCreated() {
-    const documentUris = [...this.loadedConfigurations.keys()]
+  async configCreatedOrDeleted() {
+    // invalidate all documents for all configs
+    this.loadedConfigurations.clear()
+    const documentUris = [...this.parsedMessages.keys()]
+    this.parsedMessages.clear()
     if (documentUris.length > 0) {
       await Promise.all(
         documentUris.map((documentUri) =>

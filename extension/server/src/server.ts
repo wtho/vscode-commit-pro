@@ -70,7 +70,7 @@ const diagnosticsProvider = new DiagnosticsProvider(
 )
 
 connection.onDidChangeConfiguration((params) => {
-  console.log('config changed', params)
+  // console.log('config changed', params)
 })
 
 const codeLensProvider = new CodeLensProvider(
@@ -222,12 +222,11 @@ connection.onDidChangeConfiguration(async (change) => {
 
   // Revalidate all open text documents
   diagnosticsProvider.refreshDiagnostics()
-  console.log('refresh code lenses!')
   codeLensProvider.refreshCodeLenses()
 })
 
 connection.onDefinition((params) => {
-  console.log('definition request', params)
+  // console.log('definition request', params)
   return []
 })
 
@@ -284,7 +283,17 @@ connection.onDidChangeWatchedFiles(async (change) => {
         )
       ).length > 0
 
-  if (!createdConfigChanges) {
+  const deletedConfigChanges =
+    change.changes
+      .filter((change) => change.type === FileChangeType.Deleted)
+      .map((change) => change.uri)
+      .filter((uri) =>
+        commitlintConfigFileNames.some((fileName) =>
+          uri.endsWith(`/${fileName}`)
+        )
+      ).length > 0
+
+  if (!createdConfigChanges && !deletedConfigChanges) {
     const changedConfigUris = change.changes
       .map((change) => change.uri)
       .filter((uri) =>
@@ -296,7 +305,7 @@ connection.onDidChangeWatchedFiles(async (change) => {
     await commitMessageProvider.configsChanged(changedConfigUris)
   } else {
     // invalidate all documents, as the new config could be used for any document
-    await commitMessageProvider.configCreated()
+    await commitMessageProvider.configCreatedOrDeleted()
   }
 
   const documents = commitMessageProvider.getDocuments()
