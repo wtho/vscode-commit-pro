@@ -2,3 +2,5 @@ node_modules
 dist
 target/
 **/out/
+coverage/
+tsconfig.tsbuildinfo

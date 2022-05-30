@@ -1,5 +1,6 @@
 {
   "compilerOptions": {
+    "composite": true,
     "module": "commonjs",                                /* Specify what module code is generated. */
     "target": "es2020",
     "lib": ["es2020", "esnext.Array"],

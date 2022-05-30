@@ -47,7 +47,7 @@ export function toSentenceCase(text: string): string {
   const convertSentence = (sentence: string): string => {
     const converted = sentence
       .replace(
-        /([a-z])([A-Z])/g,
+        /([a-z])([A-Z])+/g,
         (_substring, lower, upper) => `${lower} ${upper.toLowerCase()}`
       )
       // .replace(/[^A-Za-z0-9]+|_+/g, ' ')
@@ -55,9 +55,11 @@ export function toSentenceCase(text: string): string {
     return `${converted.charAt(0).toUpperCase()}${converted.slice(1)}`
   }
 
-  return text.replace(
+  const laterSentencesConverted = text.replace(
     /([^\.;:?! ][^\.;:?!]+)([\.;:?!])/g,
     (_substring, sentence, punctuation) =>
       `${convertSentence(sentence)}${punctuation}`
   )
+  // TODO: this might lowercase all alter sentences...
+  return convertSentence(laterSentencesConverted)
 }

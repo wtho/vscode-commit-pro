@@ -2,13 +2,18 @@
   "compilerOptions": {
     "module": "commonjs",
     "target": "es2022",
-    "lib": ["es2020", "esnext.Array"],
+    "lib": ["es2020", "esnext.Array", "DOM"],
     "esModuleInterop": true,
     "outDir": "out",
-    "rootDir": "src",
+    "rootDir": ".",
+    "types": ["node"],
     "sourceMap": true
   },
-  "include": ["src"],
-  "exclude": ["node_modules", ".vscode-test"],
-  "references": [{ "path": "./extension/client" }, { "path": "./extension/server" }, { "path": "./git-commit-parser" }]
+  "include": ["git-commit-parser/src", "extension/client/src", "extension/server/src"],
+  "exclude": ["node_modules", ".vscode-test", "out", "**/out/**/*.js"],
+  "references": [
+    { "path": "./extension/client" },
+    { "path": "./extension/server" },
+    { "path": "./git-commit-parser" }
+  ]
 }

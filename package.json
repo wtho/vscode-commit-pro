@@ -1,18 +1,27 @@
 {
   "name": "vscode-commit-pro",
   "version": "0.1.0",
-  "description": "Author your Commit Message like your Code",
+  "description": "Write your Commit Message like a pro - like you write your Code",
   "keywords": [
     "vscode",
     "conventional-commits",
+    "conventional",
+    "semantic",
     "commit",
     "git"
   ],
-  "author": "Thomas Wirth <thomas@wtho.de>",
+  "author": {
+    "name": "Thomas Wirth",
+    "email": "thomas@wtho.de"
+  },
+  "publisher": "wtho",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/wtho/vscode-conventional-commits.git"
+    "url": "git+https://github.com/wtho/vscode-commit-pro.git"
+  },
+  "bugs": {
+    "url": "https://github.com/wtho/vscode-commit-pro/issues"
   },
   "workspaces": [
     "git-commit-parser",
@@ -22,6 +31,10 @@
   ],
   "scripts": {
     "ts-projects:compile": "tsc -b",
-    "ts-projects:watch": "tsc -b -w"
+    "ts-projects:watch": "tsc -b -w",
+    "test": "vitest"
+  },
+  "devDependencies": {
+    "vitest": "^0.13.0"
   }
 }
