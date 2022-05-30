@@ -1,6 +1,7 @@
 import {
   CompletionItem,
   CompletionItemKind,
+  MarkupContent,
   TextDocumentPositionParams,
   TextEdit,
 } from 'vscode-languageserver'
@@ -12,45 +13,59 @@ import { WorkspaceScopeProvider } from './workspace-scope-provider'
 const defaultTypeCompletions = [
   {
     label: 'feat',
-    detail: 'A feature',
+    title: 'Features',
+    description: 'Introduces a new feature to the codebase',
   },
   {
     label: 'fix',
-    detail: 'A bug fix',
+    title: 'Bug Fixes',
+    description: 'Patches a bug in the codebase',
   },
   {
     label: 'build',
-    detail: 'A build',
+    title: 'Builds',
+    description: 'Affects the build system or external dependencies',
   },
   {
     label: 'chore',
-    detail: 'A chore',
+    title: 'Chores',
+    description: 'Changes that do not modify src or test files',
   },
   {
     label: 'ci',
-    detail: 'A CI',
+    title: 'Continuous Integration',
+    description: 'CI configuration files and scripts changes',
   },
   {
     label: 'docs',
-    detail: 'Documentation',
+    title: 'Documentation',
+    description: 'Documentation only changes',
   },
   {
     label: 'style',
-    detail: 'A style',
+    title: 'Styles',
+    description:
+      'Formatting and code-style changes not affecting meaning of code',
   },
   {
     label: 'refactor',
-    detail: 'A refactor',
+    title: 'Code Refactoring',
+    description: 'Refactorings of existing code, no bug fixing or new features',
   },
   {
     label: 'perf',
-    detail: 'A performance',
+    title: 'Performance Improvements',
+    description: 'Performance improvements in the codebase',
   },
   {
     label: 'test',
-    detail: 'A test',
+    title: 'Tests',
+    description: 'Adding missing tests or correcting existing tests',
   },
 ]
+
+const getTypeTitle = (type: string) =>
+  defaultTypeCompletions.find((data) => data.label === type) ?? type
 
 const sortTextFromIndex = (index: number) => `${`${index}`.padStart(3, '0')}`
 
@@ -162,7 +177,7 @@ export class CompletionProvider {
 
     const enrichWithBreakingExclamationMark = (
       completions: CompletionItem[]
-    ) => {
+    ): CompletionItem[] => {
       if (
         hasScope ||
         hasBreakingExclamationMark ||
@@ -176,13 +191,26 @@ export class CompletionProvider {
         }
 
         // this label is already fully written-out, offer the same completion with breaking exclamation mark
+        const existingDocumentation =
+          (completion.documentation as MarkupContent).value ?? ''
         return [
           completion,
           {
             ...completion,
-            // TODO: documentation
-            // TODO: detail
-            // TODO: labelDetails
+            documentation: {
+              kind: 'markdown',
+              value: [
+                '### Breaking Exclamation Mark',
+                `Adds a "!" to the end of the commit message type "${completion.label}" to indicate a breaking change and enforce a new major version:`,
+                '```git-commit',
+                `${completion.label}!: updated file`,
+                '```',
+                '',
+                existingDocumentation,
+              ].join('\n'),
+            },
+            // TODO: detail?
+            // TODO: labelDetails?
             label: `${completion.label}!`,
             kind: CompletionItemKind.Operator,
             textEdit: textEditForNewText(`${completion.label}!`),
@@ -193,15 +221,27 @@ export class CompletionProvider {
 
     if (!ruleDisabled && ruleAlways && typeEnumValues.length > 0) {
       return enrichWithBreakingExclamationMark(
-        typeEnumValues.map((type) => ({
-          label: type,
-          kind: CompletionItemKind.Enum,
-          // TODO: documentation
-          // TODO: detail
-          // TODO: labelDetails
-          // TODO: sortText to ensure order from config
-          textEdit: textEditForNewText(type),
-        }))
+        typeEnumValues.map((type, index) => {
+          const typeLower = type.toLocaleLowerCase()
+          const data = defaultTypeCompletions.find(typeData => typeData.label === typeLower)
+          const title = data?.title ? `\`${data.label}\` - ${data.title}` : `\`${type}\``
+          const description = data?.description ?? '*unknown type*'
+          return {
+            documentation: {
+              kind: 'markdown',
+              value: [
+                `### ${title}`,
+                `${description}`,
+              ].join('\n'),
+            },
+            label: type,
+            kind: CompletionItemKind.Enum,
+            // TODO: detail?
+            // TODO: labelDetails?
+            sortText: sortTextFromIndex(index),
+            textEdit: textEditForNewText(type),
+          }
+        })
       )
     }
 
@@ -241,7 +281,7 @@ export class CompletionProvider {
         .map((completion, index) => ({
           label: completion.label,
           kind: CompletionItemKind.Constant,
-          detail: completion.detail,
+          detail: completion.description,
           textEdit: textEditForNewText(completion.label),
           sortText: sortTextFromCountAndIndex(0, index),
         }))
@@ -262,13 +302,13 @@ export class CompletionProvider {
     const textEditForNewText = getNewTextEdit(root, 'scope')
 
     if (!ruleDisabled && ruleAlways && scopeEnumValues.length > 0) {
-      return scopeEnumValues.map((scope) => ({
+      return scopeEnumValues.map((scope, index) => ({
         label: scope,
         kind: CompletionItemKind.Enum,
-        // TODO: documentation
+        // TODO: documentation - how?
         // TODO: detail
         // TODO: labelDetails
-        // TODO: sortText to ensure order from config
+        sortText: sortTextFromIndex(index),
         textEdit: textEditForNewText(scope),
       }))
     }
@@ -298,6 +338,7 @@ export class CompletionProvider {
       )
 
       if (scopeData.length > 0) {
+        // TODO: ensure consolidated duplicates
         completions.push(
           ...scopeData.map(({ scope, count, lastUsed }, index) => ({
             label: scope,

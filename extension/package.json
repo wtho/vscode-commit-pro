@@ -8,12 +8,20 @@
     "commit",
     "git"
   ],
-  "author": "Thomas Wirth <thomas@wtho.de>",
+  "author": {
+    "name": "Thomas Wirth",
+    "email": "thomas@wtho.de"
+  },
+  "publisher": "wtho",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/wtho/vscode-commit-pro.git"
   },
+  "bugs": {
+    "url": "https://github.com/wtho/vscode-commit-pro/issues"
+  },
+  "icon": "images/commit-pro-icon.png",
   "engines": {
     "vscode": "^1.63.0"
   },
@@ -38,7 +46,13 @@
     "commands": [
       {
         "command": "commitPro.editor.command.openEditor",
-        "title": "Open Commit Message in Code Editor",
+        "title": "Commit Message in Code Editor",
+        "category": "Git",
+        "icon": "$(wand)"
+      },
+      {
+        "command": "commitPro.editor.command.openEditorAmend",
+        "title": "Amend Commit Message in Code Editor",
         "category": "Git",
         "icon": "$(wand)"
       }
