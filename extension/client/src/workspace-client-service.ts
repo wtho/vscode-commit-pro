@@ -70,16 +70,19 @@ export class WorkspaceClientService implements Disposable {
       const contentUint8Array = await workspace.fs.readFile(uri)
       const content = contentUint8Array.toString()
       const packageJson = JSON.parse(content)
-      const workspaces = packageJson.workspaces
-      return workspaces.flatMap((workspace) => {
-        if (workspace.endsWith('/*')) {
+      const workspaces = packageJson.workspaces as string[] | undefined
+      if (!workspaces) {
+        return []
+      }
+      return workspaces.flatMap((workspaceDef) => {
+        if (workspaceDef.endsWith('/*')) {
           // resolve wildcards - e. g. 'packages/*' to 'package-a', 'package-b'
           return []
         }
 
         return [
           {
-            label: workspace,
+            label: workspaceDef,
             origin: 'Root package.json field "workspaces"',
             type: 'package-json-workspaces',
           },

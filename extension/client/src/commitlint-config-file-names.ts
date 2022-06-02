@@ -47,7 +47,8 @@ const editPackageJsonFile = async (
   const contentUntilInsertIndexLines = packageJsonContent.substring(0, insertIndex).split('\n')
 
   const insertLine = contentUntilInsertIndexLines.length - 1
-  const insertChar = contentUntilInsertIndexLines.at(-1).length
+  const lastLine = contentUntilInsertIndexLines.at(-1)
+  const insertChar = lastLine?.length ?? Number.MAX_SAFE_INTEGER
 
   const workspaceEdit = new WorkspaceEdit()
 
@@ -216,7 +217,7 @@ export const commitlintConfigFileData: {
   [file: string]: {
     detail?: string
     description?: string
-    getEdit?: (context: CommitlintConfigFileNamesContext) => WorkspaceEdit | Promise<WorkspaceEdit>
+    getEdit: (context: CommitlintConfigFileNamesContext) => WorkspaceEdit | Promise<WorkspaceEdit>
   }
 } = {
   '.commitlintrc.json': {

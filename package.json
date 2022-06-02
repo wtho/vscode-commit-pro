@@ -30,9 +30,11 @@
     "extension/server"
   ],
   "scripts": {
-    "ts-projects:compile": "tsc -b",
-    "ts-projects:watch": "tsc -b -w",
-    "test": "vitest"
+    "ts-projects:precompile": "cd git-commit-parser && tsc -b",
+    "ts-projects:compile": "npm run ts-projects:precompile && tsc -b",
+    "ts-projects:watch": "npm run ts-projects:precompile && tsc -b -w",
+    "test": "vitest",
+    "test-run": "vitest --run"
   },
   "devDependencies": {
     "vitest": "^0.13.0"

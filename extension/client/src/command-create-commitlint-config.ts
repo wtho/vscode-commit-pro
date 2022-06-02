@@ -20,6 +20,11 @@ export class CreateCommitlintConfigFileCommand {
   ) {}
 
   public async run(): Promise<void> {
+    const workspaceUri = this.workspace.workspaceFolders?.[0]?.uri
+    if (!workspaceUri) {
+      throw new Error(`${this.command} requires a vscode workspace`)
+    }
+
     const rootPackageJsonPromise = await this.workspace.findFiles(
       'package.json'
     )
@@ -48,7 +53,7 @@ export class CreateCommitlintConfigFileCommand {
       ]
 
       const context: CommitlintConfigFileNamesContext = {
-        workspaceUri: this.workspace.workspaceFolders?.[0]?.uri,
+        workspaceUri,
         scopes,
         getFileContent: (fileUri) =>
           new Promise((resolve) =>
@@ -59,6 +64,10 @@ export class CreateCommitlintConfigFileCommand {
       }
 
       const pickedItem = await pickingItem
+
+      if (!pickedItem) {
+        return
+      }
 
       const workspaceEdit = await commitlintConfigFileData[
         pickedItem.label

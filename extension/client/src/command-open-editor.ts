@@ -22,7 +22,7 @@ async function runWithShell(
 async function runWithoutShell(
   command: string,
   args: ReadonlyArray<string>,
-  callback?: (
+  callback: (
     error: ExecException | null,
     stdout: string,
     stderr: string

@@ -1,15 +1,18 @@
 {
   "compilerOptions": {
     "composite": true,
-    "target": "es2020",
-    "lib": ["es2020", "DOM"],
     "module": "commonjs",
+    "target": "es2020",
     "moduleResolution": "node",
     "esModuleInterop": true,
+    "lib": ["es2020", "DOM"],
+    "outDir": "out",
+    "rootDir": "src",
     "sourceMap": true,
     "strict": true,
-    "outDir": "out",
-    "rootDir": "src"
   },
-  "exclude": ["node_modules", ".vscode-test", "out"]
+  "exclude": ["node_modules", ".vscode-test", "out"],
+  "references": [{
+    "path": "../../git-commit-parser"
+  }]
 }

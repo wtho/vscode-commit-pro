@@ -6,13 +6,24 @@ import type {
 } from '../types/vscode.git'
 
 const createResolvablePromise = <T>() => {
-  type ResolvablePromise<T> = Promise<T> & { resolve: (arg: T) => void }
-  let resolveFn: (arg: T) => void
+  type ResolvablePromise<T> = Promise<T> & {
+    resolve: (arg: T) => void
+    reject: (error: Error) => void
+  }
+  let resolveFn: undefined | ((arg: T) => void)
+  let rejectFn: undefined | ((error: Error) => void)
   const promise = new Promise<T>((resolve, reject) => {
     resolveFn = resolve
+    rejectFn = reject
   }) as ResolvablePromise<T>
 
+  if (!resolveFn || !rejectFn) {
+    // just to make strict TS happy
+    return promise
+  }
+
   promise.resolve = resolveFn
+  promise.reject = rejectFn
 
   return promise
 }
@@ -36,7 +47,7 @@ export type GitClientEvent =
 export interface GitClientRepostoryUpdateEvent {
   type: 'repository-update'
   uri: string
-  branch: string
+  branch: string | undefined
   headCommit: string | undefined
   commitIds: string[]
 }
@@ -56,8 +67,8 @@ type LoadedRepository = {
 interface BaseCommit {
   hash7: string
   message: string
-  authorName: string
-  commitDate: string
+  authorName: string | undefined
+  commitDate: string | undefined
 }
 
 export class GitClientService
@@ -79,6 +90,12 @@ export class GitClientService
 
   async init() {
     const extension = extensions.getExtension<GitExtension>('vscode.git')
+
+    if (!extension) {
+      this.initialization.reject(new Error('Git extension not found'))
+      return
+    }
+
     const gitExtension = extension.isActive
       ? extension.exports
       : await extension.activate()
@@ -139,10 +156,16 @@ export class GitClientService
       return this.loadRepository(repository)
     }
     const loadedRepository = this.repoForUri.get(uri)
-    if (loadedRepository.branch !== repository.state.HEAD.name) {
+    if (!loadedRepository) {
+      throw new Error('Repository not found')
+    }
+    const head = repository.state.HEAD
+    const headName = head?.name
+    const headCommit = head?.commit?.substring?.(0, 7) ?? ''
+    if (loadedRepository.branch !== headName) {
       return this.loadRepository(repository)
     }
-    const newHash7 = repository.state.HEAD.commit.substring(0, 7)
+    const newHash7 = headCommit
     if (loadedRepository.headCommit !== newHash7) {
       return this.loadRepository(repository)
     }
@@ -154,19 +177,27 @@ export class GitClientService
       return
     }
     const loadedRepository = this.repoForUri.get(uri)
+    if (!loadedRepository) {
+      throw new Error('Repository not found')
+    }
     loadedRepository.disposableChangeListener.dispose()
     this.repoForUri.delete(uri)
 
     this.fire({ uri, type: 'repository-close' })
   }
 
-  async loadRepository(repository: Repository): Promise<void> {
+  async loadRepository(
+    repository: Repository | null | undefined
+  ): Promise<void> {
+    if (!repository) {
+      return
+    }
     const uri = repository.rootUri.toString()
 
     await repository.status()
     const commits = await repository.log({ maxEntries: 2000 })
 
-    const branch = repository.state.HEAD.name
+    const branch = repository.state.HEAD?.name
     const baseCommitMap: { [hash7: string]: BaseCommit } = {}
     const commitIds: string[] = new Array(commits.length)
 
@@ -178,7 +209,7 @@ export class GitClientService
         hash7,
         authorName: commit.authorName,
         message: commit.message,
-        commitDate: commit.commitDate.toISOString(),
+        commitDate: commit.commitDate?.toISOString(),
       }
     }
 
@@ -221,7 +252,7 @@ export class GitClientService
 
       if (!commit) {
         this.gitApi
-          .then((gitApi) => gitApi.getRepository(Uri.parse(uri)))
+          .then((gitApi) => gitApi?.getRepository(Uri.parse(uri)))
           .then((repository) => this.loadRepository(repository))
         throw new Error(`Requested commit id ${commitId} not found`)
       }
@@ -239,6 +270,9 @@ export class GitClientService
     await this.initialization
 
     const gitApi = await this.gitApi
+    if (!gitApi) {
+      return true
+    }
     return gitApi.repositories.some(
       (repo) =>
         repo.state.indexChanges.length === 0 &&

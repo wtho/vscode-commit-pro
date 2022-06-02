@@ -3,14 +3,16 @@
     "composite": true,
     "module": "commonjs",                                /* Specify what module code is generated. */
     "target": "es2020",
+    "esModuleInterop": true,                             /* Emit additional JavaScript to ease support for importing CommonJS modules. This enables `allowSyntheticDefaultImports` for type compatibility. */
     "lib": ["es2020", "esnext.Array"],
     "outDir": "out",
+    "rootDir": "src",
     "sourceMap": true,
-    "esModuleInterop": true,                             /* Emit additional JavaScript to ease support for importing CommonJS modules. This enables `allowSyntheticDefaultImports` for type compatibility. */
+    "declaration": true,
+    "declarationMap": true,
     "forceConsistentCasingInFileNames": true,            /* Ensure that casing is correct in imports. */
     "strict": true,                                      /* Enable all strict type-checking options. */
-    "skipLibCheck": true,                                 /* Skip type checking all .d.ts files. */
-    "declaration": true
+    "skipLibCheck": false,                                 /* Skip type checking all .d.ts files. */
   },
   "include": ["src"],
 }

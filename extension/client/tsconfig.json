@@ -3,10 +3,12 @@
     "composite": true,
     "module": "commonjs",
     "target": "es2020",
+    "esModuleInterop": true,
     "lib": ["es2020", "DOM"],
     "outDir": "out",
     "rootDir": "src",
-    "sourceMap": true
+    "sourceMap": true,
+    "strict": true
   },
   "include": ["src"],
   "exclude": ["node_modules", ".vscode-test", "out"]
