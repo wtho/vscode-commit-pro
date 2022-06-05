@@ -26,23 +26,27 @@ jobs:
       - name: build extension
         working-directory: extension
         run: |
-          npx vsce package
+          npm run vscode:package
+          echo "::set-output name=vsixPath::$(find . -name 'vscode-commit-pro-extension.*.vsix')"
 
-      # - name: semantic-release
-      #   if: github.ref == 'refs/heads/master'
-      #   uses: codfish/semantic-release-action@v1
-      #   env:
-      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: semantic-release
+        if: github.ref == 'refs/heads/master'
+        uses: codfish/semantic-release-action@v1
+        with:
+          dry_run: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # - name: Publish to Open VSX Registry
       #   uses: HaaLeo/publish-vscode-extension@v1
       #   with:
       #     pat: ${{ secrets.OPEN_VSX_TOKEN }}
+      #     extensionFile: ${{ steps.buildExtension.outputs.vsixPath }}
 
       # - name: Publish to Visual Studio Marketplace
       #   uses: HaaLeo/publish-vscode-extension@v1
       #   with:
       #     pat: ${{ secrets.VS_MARKETPLACE_TOKEN }}
       #     registryUrl: https://marketplace.visualstudio.com
-      #     extensionFile: ${{ steps.publishToOpenVSX.outputs.vsixPath }}
+      #     extensionFile: ${{ steps.buildExtension.outputs.vsixPath }}
 

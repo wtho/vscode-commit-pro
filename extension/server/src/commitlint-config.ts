@@ -7,7 +7,12 @@ import type {
   QualifiedConfig,
 } from '@commitlint/types'
 import { basename, dirname, isAbsolute } from 'path'
-import { LoadConfigResult } from '@commitlint/load/lib/utils/load-config'
+import type { LoadConfigResult } from '@commitlint/load/lib/utils/load-config'
+import * as commitlintLoadLoadConfig from '@commitlint/load/lib/utils/load-config'
+import commitlintLoad from '@commitlint/load'
+import commitlintLint from '@commitlint/lint'
+import commitlintParse from '@commitlint/parse'
+
 export type Config = Partial<QualifiedConfig & { parserOpts: ParserOptions }>
 
 type LibAtCommitlintLoad = typeof import('@commitlint/load')
@@ -54,7 +59,8 @@ export async function loadConfig({
   // default config
   config = {
     ...configConventional,
-    parserPreset: availableParserPresets['conventional-changelog-conventionalcommits'],
+    parserPreset:
+      availableParserPresets['conventional-changelog-conventionalcommits'],
   }
   if (!config) {
     return { config, path: 'unknown', default: true }
@@ -67,11 +73,27 @@ export async function loadConfig({
   }
   let parserOpts = config?.parserPreset?.parserOpts as ParserOptions | undefined
   if (typeof parserOpts === 'function') {
-    parserOpts = await new Promise((rs) =>
-      (parserOpts as Function)(
-        (_: unknown, opts: { parserOpts?: ParserOptions }) =>
+    parserOpts = await new Promise((rs) => {
+      let resolved = false
+      const maybePromise: Promise<{ parserOpts?: ParserOptions }> = (parserOpts as Function)(
+        (_: unknown, opts: { parserOpts?: ParserOptions }) => {
+          if (resolved) {
+            return
+          }
+          resolved = true
           rs(opts.parserOpts)
+        }
       )
+      if (maybePromise?.then && typeof maybePromise.then === 'function') {
+        maybePromise.then(result => {
+          if (resolved) {
+            return
+          }
+          resolved = true
+          rs(result.parserOpts)
+        })
+      }
+    }
     )
   }
   if (parserOpts && typeof parserOpts.commentChar !== 'string') {
@@ -111,34 +133,59 @@ export function isNodeExceptionCode<T extends string>(
 }
 
 export const loadAtCommitlintLoad = (workspacePath: string | undefined) => {
-  const { result } = loadLibrary<LibAtCommitlintLoad>(
-    '@commitlint/load',
-    workspacePath
-  )
-  return result.default
+  try {
+    const { result } = loadLibrary<LibAtCommitlintLoad>(
+      '@commitlint/load',
+      workspacePath
+    )
+    return result.default
+  } catch (err) {
+    if (isNodeExceptionCode(err, 'MODULE_NOT_FOUND')) {
+      return commitlintLoad
+    }
+    throw err
+  }
 }
 export const loadAtCommitlintParse = (workspacePath: string | undefined) => {
-  const { result } = loadLibrary<LibAtCommitlintParse>(
-    '@commitlint/parse',
-    workspacePath
-  )
-  return result.default
+  try {
+    const { result } = loadLibrary<LibAtCommitlintParse>(
+      '@commitlint/parse',
+      workspacePath
+    )
+    return result.default
+  } catch (err) {
+    if (isNodeExceptionCode(err, 'MODULE_NOT_FOUND')) {
+      return commitlintParse
+    }
+    throw err
+  }
 }
 export const loadAtCommitlintLint = (workspacePath: string | undefined) => {
-  const { result } = loadLibrary<LibAtCommitlintLint>(
-    '@commitlint/lint',
-    workspacePath
-  )
-  return result.default
+  try {
+    const { result } = loadLibrary<LibAtCommitlintLint>(
+      '@commitlint/lint',
+      workspacePath
+    )
+    return result.default
+  } catch (err) {
+    if (isNodeExceptionCode(err, 'MODULE_NOT_FOUND')) {
+      return commitlintLint
+    }
+    throw err
+  }
 }
 export const loadAtCommitlintLoadUtilLoadConfig = (
   workspacePath: string | undefined
 ) => {
-  const { result } = loadLibrary<LibAtCommitlintLoadUtilLoadConfig>(
-    '@commitlint/load/lib/utils/load-config',
-    workspacePath
-  )
-  return result.loadConfig
+  try {
+    const { result } = loadLibrary<LibAtCommitlintLoadUtilLoadConfig>(
+      '@commitlint/load/lib/utils/load-config',
+      workspacePath
+    )
+    return result.loadConfig
+  } catch (err) {
+    return commitlintLoadLoadConfig.loadConfig
+  }
 }
 
 export const loadLibrary = <T>(
