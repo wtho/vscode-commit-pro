@@ -15,7 +15,7 @@
       "name": "Launch Client",
       "runtimeExecutable": "${execPath}",
       "args": ["--extensionDevelopmentPath=${workspaceRoot}/extension/"],
-      "outFiles": ["${workspaceRoot}/extension/client/out/**/*.js"],
+      "outFiles": ["${workspaceRoot}/extension-client/out/**/*.js"],
       "preLaunchTask": {
         "type": "npm",
         "script": "ts-projects:watch"
@@ -27,7 +27,7 @@
       "name": "Attach to Server",
       "port": 6009,
       "restart": true,
-      "outFiles": ["${workspaceRoot}/extension/server/out/**/*.js"]
+      "outFiles": ["${workspaceRoot}/extension-server/out/**/*.js"]
     },
     {
       "name": "Language Server E2E Test",
@@ -36,10 +36,10 @@
       "runtimeExecutable": "${execPath}",
       "args": [
         "--extensionDevelopmentPath=${workspaceRoot}",
-        "--extensionTestsPath=${workspaceRoot}/extension/client/out/test/index",
+        "--extensionTestsPath=${workspaceRoot}/extension-client/out/test/index",
         "${workspaceRoot}/client/testFixture"
       ],
-      "outFiles": ["${workspaceRoot}/extension/client/out/test/**/*.js"]
+      "outFiles": ["${workspaceRoot}/extension-client/out/test/**/*.js"]
     },
     {
       "type": "pwa-node",

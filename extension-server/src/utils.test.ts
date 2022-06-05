@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest'
-import { toSentenceCase } from './utils'
+import { textToCase, toSentenceCase } from './utils'
 
 describe('utils', () => {
   describe('toSentenceCase', () => {
@@ -10,3 +10,5 @@ describe('utils', () => {
     })
   })
 })
+
+

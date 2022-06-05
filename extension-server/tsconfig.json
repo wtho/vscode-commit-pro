@@ -13,6 +13,6 @@
   },
   "exclude": ["node_modules", ".vscode-test", "out"],
   "references": [{
-    "path": "../../git-commit-parser"
+    "path": "../git-commit-parser"
   }]
 }

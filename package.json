@@ -26,8 +26,8 @@
   "workspaces": [
     "git-commit-parser",
     "extension",
-    "extension/client",
-    "extension/server"
+    "extension-client",
+    "extension-server"
   ],
   "scripts": {
     "ts-projects:precompile": "cd git-commit-parser && tsc -b",
@@ -37,6 +37,9 @@
     "test-run": "vitest --run"
   },
   "devDependencies": {
-    "vitest": "^0.13.0"
+    "@semantic-release/changelog": "^6.0.1",
+    "@semantic-release/git": "^10.0.1",
+    "vitest": "^0.13.0",
+    "vsce": "./avoiding-hoisting"
   }
 }

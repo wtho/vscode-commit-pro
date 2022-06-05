@@ -11,11 +11,11 @@
     "types": ["node"],
     "strict": true
   },
-  "include": ["git-commit-parser/src", "extension/client/src", "extension/server/src"],
+  "include": ["git-commit-parser/src", "extension-client/src", "extension-server/src"],
   "exclude": ["node_modules", ".vscode-test", "out", "**/out/**/*.js"],
   // "references": [
   //   { "path": "./git-commit-parser" },
-  //   { "path": "./extension/client" },
-  //   { "path": "./extension/server" }
+  //   { "path": "./extension-client" },
+  //   { "path": "./extension-server" }
   // ]
 }

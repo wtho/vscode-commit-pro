@@ -23,19 +23,24 @@ jobs:
         working-directory: git-commit-parser
         run: npx tsc -b
 
-      - name: build extension
+      - name: test build extension
         working-directory: extension
-        run: |
-          npm run vscode:package
-          echo "::set-output name=vsixPath::$(find . -name 'vscode-commit-pro-extension.*.vsix')"
+        run: npm run vscode:package
 
       - name: semantic-release
-        if: github.ref == 'refs/heads/master'
+        if: github.ref == 'refs/heads/main'
         uses: codfish/semantic-release-action@v1
         with:
           dry_run: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # actual build extension (with correct version)
+      - name: build extension
+        working-directory: extension
+        run: |
+          npm run vscode:package
+          echo "::set-output name=vsixPath::$(find . -name 'vscode-commit-pro-extension.*.vsix')"
 
       # - name: Publish to Open VSX Registry
       #   uses: HaaLeo/publish-vscode-extension@v1

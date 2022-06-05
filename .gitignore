@@ -4,3 +4,4 @@ target/
 **/out/
 coverage/
 tsconfig.tsbuildinfo
+extension/*.vsix

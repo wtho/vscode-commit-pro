@@ -3,7 +3,23 @@ module.exports = {
     '@semantic-release/commit-analyzer',
     '@semantic-release/release-notes-generator',
     '@semantic-release/changelog',
-    '@semantic-release/github',
+    [
+      '@semantic-release/npm',
+      {
+        npmPublish: false,
+      },
+    ],
+    [
+      '@semantic-release/github',
+      {
+        assets: [
+          {
+            path: 'extension/vscode-commit-pro-extension.*.vsix',
+            label: 'VSCode Extension (.vsix)',
+          },
+        ],
+      },
+    ],
     [
       '@semantic-release/git',
       {
