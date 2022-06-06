@@ -101,7 +101,7 @@
     "esbuild-full-minify": "npm run esbuild-base-extension -- --minify && npm run esbuild-base-server -- --minify && npm run post-build",
     "esbuild-base-extension": "esbuild ../extension-client/src/extension.ts --bundle --outfile=out/extension.js --external:vscode --format=cjs --platform=node",
     "esbuild-base-server": "esbuild ../extension-server/src/server.ts --bundle --outfile=out/server.js --external:vscode --external:'ts-node' --format=cjs --platform=node",
-    "post-build": "ncp mock out/node_modules && ncp ../node_modules/conventional-changelog-conventionalcommits/templates ./out/templates",
+    "post-build": "ncp mock out/node_modules && ncp ../node_modules/conventional-changelog-conventionalcommits/templates ./out/templates && ncp ../README.md .",
     "test-compile": "tsc -p ./",
     "compile": "tsc -b",
     "watch": "tsc -b -w",
