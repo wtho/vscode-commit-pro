@@ -1,6 +1,7 @@
 {
 	"name": "vscode-commit-pro-extension-server",
-	"version": "0.1.0",
+	"version": "0.0.1",
+	"private": true,
 	"description": "Author your Commit Message like your Code",
 	"keywords": [
 		"vscode",

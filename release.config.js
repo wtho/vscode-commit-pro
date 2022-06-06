@@ -3,12 +3,9 @@ module.exports = {
     '@semantic-release/commit-analyzer',
     '@semantic-release/release-notes-generator',
     '@semantic-release/changelog',
-    [
-      '@semantic-release/npm',
-      {
-        npmPublish: false,
-      },
-    ],
+    '@semantic-release/npm', // root package.json
+    ['@semantic-release/npm', { pkgRoot: 'extension' }],
+    ['@semantic-release/npm', { pkgRoot: 'git-commit-parser' }],
     [
       '@semantic-release/github',
       {
