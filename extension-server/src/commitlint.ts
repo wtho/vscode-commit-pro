@@ -179,7 +179,7 @@ function getDiagnosticForMarker(
     lintRuleOutcome.name.startsWith(prefix)
   )
   if (!lintRuleOutcomePrefix) {
-    // TODO log error?
+    console.error('Unhandled lint rule outcome', lintRuleOutcome)
     return null
   }
   const converter = lintRuleOutcomeConversions[lintRuleOutcomePrefix]
