@@ -1,3 +1,10 @@
+## [0.1.3](https://github.com/wtho/vscode-commit-pro/compare/v0.1.2...v0.1.3) (2022-06-06)
+
+
+### Bug Fixes
+
+* use correct links and ship changelog ([66e2b51](https://github.com/wtho/vscode-commit-pro/commit/66e2b51f958e22d109a9c26a3d82d0530ce277a0))
+
 ## [0.1.2](https://github.com/wtho/vscode-commit-pro/compare/v0.1.1...v0.1.2) (2022-06-06)
 
 
