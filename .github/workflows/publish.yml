@@ -30,8 +30,6 @@ jobs:
       - name: semantic-release
         if: github.ref == 'refs/heads/main'
         uses: codfish/semantic-release-action@v1
-        with:
-          dry_run: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
