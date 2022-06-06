@@ -35,19 +35,16 @@ jobs:
 
       # actual build extension (with correct version)
       - name: reference extension
-        working-directory: extension
-        # run: |
-        #   npm run vscode:package
-        #   echo "::set-output name=vsixPath::$(find . -name 'vscode-commit-pro-extension-*.vsix')"
+        id: referenceExtension
         run: echo "::set-output name=vsixPath::$(find . -name 'vscode-commit-pro-extension-*.vsix')"
 
-      # - name: Publish to Open VSX Registry
-      #   uses: HaaLeo/publish-vscode-extension@v1
-      #   with:
-      #     pat: ${{ secrets.OPEN_VSX_TOKEN }}
-      #     extensionFile: ${{ steps.referenceExtension.outputs.vsixPath }}
+      - name: publish to open vsx registry
+        uses: HaaLeo/publish-vscode-extension@v1
+        with:
+          pat: ${{ secrets.OPEN_VSX_TOKEN }}
+          extensionFile: ${{ steps.referenceExtension.outputs.vsixPath }}
 
-      # - name: Publish to Visual Studio Marketplace
+      # - name: publish to visual studio marketplace
       #   uses: HaaLeo/publish-vscode-extension@v1
       #   with:
       #     pat: ${{ secrets.VS_MARKETPLACE_TOKEN }}
