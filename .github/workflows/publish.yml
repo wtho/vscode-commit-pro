@@ -36,9 +36,10 @@ jobs:
       # actual build extension (with correct version)
       - name: build extension
         working-directory: extension
-        run: |
-          npm run vscode:package
-          echo "::set-output name=vsixPath::$(find . -name 'vscode-commit-pro-extension.*.vsix')"
+        # run: |
+        #   npm run vscode:package
+        #   echo "::set-output name=vsixPath::$(find . -name 'vscode-commit-pro-extension-*.vsix')"
+        run: echo "::set-output name=vsixPath::$(find . -name 'vscode-commit-pro-extension-*.vsix')"
 
       # - name: Publish to Open VSX Registry
       #   uses: HaaLeo/publish-vscode-extension@v1

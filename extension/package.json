@@ -1,8 +1,8 @@
 {
   "name": "vscode-commit-pro-extension",
   "displayName": "CommitPro",
-  "version": "0.0.1",
-	"private": true,
+  "version": "0.1.1",
+  "private": true,
   "description": "Write your Commit Message like a pro - like you write your Code",
   "keywords": [
     "vscode",
