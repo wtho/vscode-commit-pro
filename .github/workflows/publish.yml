@@ -25,7 +25,10 @@ jobs:
 
       - name: test build extension
         working-directory: extension
-        run: npm run vscode:package
+        run: |
+          npm run vscode:package
+          rm vscode-commit-pro-extension-*.vsix
+        # ⇧ clean up again, otherwise referencing won't work
 
       - name: semantic-release
         if: github.ref == 'refs/heads/main'
