@@ -1,3 +1,10 @@
+## [0.1.2](https://github.com/wtho/vscode-commit-pro/compare/v0.1.1...v0.1.2) (2022-06-06)
+
+
+### Bug Fixes
+
+* correctly reference extension README.md ([7c4b35c](https://github.com/wtho/vscode-commit-pro/commit/7c4b35cd4c4d6ec19bc2e31cb2660788e1db3a71))
+
 ## [0.1.1](https://github.com/wtho/vscode-commit-pro/compare/v0.1.0...v0.1.1) (2022-06-06)
 
 

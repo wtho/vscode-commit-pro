@@ -1,6 +1,6 @@
 {
   "name": "git-commit-parser",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "description": "Scanner and parser for git commit messages",
   "main": "out/main.js",
