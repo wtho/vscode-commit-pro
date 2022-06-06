@@ -1,6 +1,7 @@
 **/*
 !out/**/*
 !README.md
+!CHANGELOG.md
 !LICENSE.md
 !package.json
 !images/commit-pro-icon.png

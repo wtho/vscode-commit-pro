@@ -1,6 +1,6 @@
-[![](https://vsmarketplacebadge.apphb.com/version-short/wtho.commitpro.svg)](https://marketplace.visualstudio.com/items?itemName=wtho.commitpro)
-[![](https://vsmarketplacebadge.apphb.com/downloads-short/wtho.commitpro.svg)](https://marketplace.visualstudio.com/items?itemName=wtho.commitpro)
-[![](https://vsmarketplacebadge.apphb.com/rating-short/wtho.commitpro.svg)](https://marketplace.visualstudio.com/items?itemName=wtho.commitpro)
+[![](https://vsmarketplacebadge.apphb.com/version-short/wtho.vscode-commit-pro-extension.svg)](https://marketplace.visualstudio.com/items?itemName=wtho.vscode-commit-pro-extension)
+[![](https://vsmarketplacebadge.apphb.com/downloads-short/wtho.vscode-commit-pro-extension.svg)](https://marketplace.visualstudio.com/items?itemName=wtho.vscode-commit-pro-extension)
+[![](https://vsmarketplacebadge.apphb.com/rating-short/wtho.vscode-commit-pro-extension.svg)](https://marketplace.visualstudio.com/items?itemName=wtho.vscode-commit-pro-extension)
 
 <p align="center">
   <br />
