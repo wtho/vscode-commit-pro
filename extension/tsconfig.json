@@ -11,6 +11,5 @@
     "strict": true
   },
   "include": ["src/**/*.ts"],
-  "exclude": ["node_modules", ".vscode-test", "**.test.ts", "**.test.js"],
-  "references": [{ "path": "./client" }, { "path": "./server" }]
+  "exclude": ["node_modules", ".vscode-test", "**.test.ts", "**.test.js"]
 }

@@ -41,7 +41,6 @@ jobs:
 
       - name: publish to open vsx registry
         uses: HaaLeo/publish-vscode-extension@v1
-        working-directory: extension
         with:
           pat: ${{ secrets.OPEN_VSX_TOKEN }}
           extensionFile: ${{ steps.referenceExtension.outputs.vsixPath }}
@@ -49,7 +48,6 @@ jobs:
 
       - name: publish to visual studio marketplace
         uses: HaaLeo/publish-vscode-extension@v1
-        working-directory: extension
         with:
           pat: ${{ secrets.VS_MARKETPLACE_TOKEN }}
           registryUrl: https://marketplace.visualstudio.com
