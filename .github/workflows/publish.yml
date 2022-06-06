@@ -29,12 +29,12 @@ jobs:
 
       - name: semantic-release
         if: github.ref == 'refs/heads/main'
-        uses: codfish/semantic-release-action@v1
+        run: npx semantic-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # actual build extension (with correct version)
-      - name: build extension
+      - name: reference extension
         working-directory: extension
         # run: |
         #   npm run vscode:package
@@ -45,12 +45,12 @@ jobs:
       #   uses: HaaLeo/publish-vscode-extension@v1
       #   with:
       #     pat: ${{ secrets.OPEN_VSX_TOKEN }}
-      #     extensionFile: ${{ steps.buildExtension.outputs.vsixPath }}
+      #     extensionFile: ${{ steps.referenceExtension.outputs.vsixPath }}
 
       # - name: Publish to Visual Studio Marketplace
       #   uses: HaaLeo/publish-vscode-extension@v1
       #   with:
       #     pat: ${{ secrets.VS_MARKETPLACE_TOKEN }}
       #     registryUrl: https://marketplace.visualstudio.com
-      #     extensionFile: ${{ steps.buildExtension.outputs.vsixPath }}
+      #     extensionFile: ${{ steps.referenceExtension.outputs.vsixPath }}
 
