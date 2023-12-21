@@ -2,6 +2,20 @@ import type { ChildProcess, ExecException, ExecOptions } from 'child_process'
 import * as url from 'url'
 import { GitClientService } from './git-client-service'
 
+async function runShell(
+  command: string,
+  options: ExecOptions,
+  callback?: (
+    error: ExecException | null,
+    stdout: string,
+    stderr: string
+  ) => void
+): Promise<ChildProcess> {
+  const childProcess = await import('child_process')
+
+  return childProcess.exec(command, options, callback)
+}
+
 async function runWithShell(
   command: string,
   args: ReadonlyArray<string>,
@@ -35,20 +49,23 @@ async function runWithoutShell(
 
 async function getCodeExecutive(): Promise<{
   inPath: boolean
+  path: string
   version: string | undefined
 }> {
   return new Promise((resolve, reject) =>
-    runWithoutShell('code', ['-v'], (error, stdout, stderr) => {
-      if (error) {
-        resolve({ inPath: false, version: undefined })
-        return
+    runShell('set -e; f=`command -v code || command -v codium`; echo $f; $f -v',
+      (error, stdout, stderr) => {
+        if (error) {
+          resolve({ inPath: false, path: "", version: undefined })
+          return
+        }
+        resolve({
+          inPath: true,
+          path: stdout.split('\n')[0].trim(),
+          version: stdout.split('\n')[1].trim(),
+        })
       }
-      resolve({
-        inPath: true,
-        // example output: "1.42.1\ndfd34e8260c270da74b5c2d86d61aee4b6d56977\nx64"
-        version: stdout.split('\n')[0].trim(),
-      })
-    })
+    )
   )
 }
 
@@ -71,8 +88,8 @@ async function getGitExecutive(): Promise<{
   )
 }
 
-async function startGitCodeWait(folder: string, amend: boolean): Promise<string> {
-  const args = ['-c', 'core.editor="code --wait"', 'commit']
+async function startGitCodeWait(folder: string, amend: boolean, codeExePath: string): Promise<string> {
+  const args = ['-c', `core.editor="${codeExePath} --wait"`, 'commit']
   if (amend) {
     args.push('--amend')
   }
@@ -96,7 +113,7 @@ export class OpenEditorCommand {
   public readonly command = 'commitPro.editor.command.openEditor'
   public readonly commandAlternate = 'commitPro.editor.command.openEditorAmend'
 
-  constructor(private readonly gitClientService: GitClientService) {}
+  constructor(private readonly gitClientService: GitClientService) { }
 
   public async run(gitUris: string[], options?: { amend?: boolean }): Promise<void> {
     const [gitExecutive, codeExecutive] = await Promise.all([
@@ -120,7 +137,7 @@ export class OpenEditorCommand {
     const amend = options?.amend ?? await this.gitClientService.isClean()
 
     try {
-      const resultMessage = await startGitCodeWait(folder, amend)
+      const resultMessage = await startGitCodeWait(folder, amend, codeExecutive.path)
       console.log({ resultMessage })
     } catch (err) {
       console.error({ err })
